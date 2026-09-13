@@ -5,36 +5,59 @@ nothing else.
 
 ## As a Docksal service
 
-In your project's `.docksal/docksal.yml`:
+Add this to `.docksal/docksal.yml` in the project that needs it:
 
 ```yaml
 services:
   msgpit:
     hostname: msgpit
-    image: ghcr.io/<org>/msgpit:1
+    image: ${MSGPIT_IMAGE:-ghcr.io/raymondsteffann/msgpit:1}
     volumes:
       - msgpit_data:/data
     labels:
-      - io.docksal.virtual-host=msgpit.${VIRTUAL_HOST}
+      - io.docksal.virtual-host=msgpit.${VIRTUAL_HOST},msgpit.${VIRTUAL_HOST}.*
       - io.docksal.virtual-port=8080
+      - io.docksal.cert-name=${VIRTUAL_HOST_CERT_NAME:-none}
     environment:
       - MSGPIT_SPRYNG_DLR_URL=http://web/webhooks/spryng
+    healthcheck:
+      interval: ${DOCKSAL_CONTAINER_HEALTHCHECK_INTERVAL:-10s}
 
 volumes:
   msgpit_data:
 ```
 
-`fin up`, and the UI is at `http://msgpit.<project>.docksal.site`. Your application reaches the
-API at `http://msgpit:8080`.
+`fin up`, and the UI is at `http://msgpit.<project>.docksal.site`. Your application reaches the API
+at `http://msgpit:8080` from any other container in the project.
+
+Pin the major tag. Breaking changes to the provider routes or the `/api` contract get a major
+version bump, so `:1` keeps working until you decide otherwise.
+
+If you leave out the `volumes` block, captured messages disappear on every `fin project reset`.
+That is a legitimate choice for a throwaway catcher; it is just worth knowing you made it.
+
+### Trying a development build
+
+Every push to msgpit's `main` branch publishes a release, and every push to `dev` publishes a
+moving `:dev` tag. To point one project at that build without touching the shared config, put this
+in `.docksal/docksal-local.env`, which is gitignored:
+
+```dotenv
+MSGPIT_IMAGE=ghcr.io/raymondsteffann/msgpit:dev
+```
+
+Then `fin up` and check the version in the status bar at the bottom of the UI. Remove the line to
+go back to the pinned release. `:dev-<sha>` tags are published too, if you need a specific build
+rather than the latest one.
 
 ## Plain Docker
 
 ```bash
-docker run -p 8080:8080 ghcr.io/<org>/msgpit:1
+docker run -p 8080:8080 -v msgpit_data:/data ghcr.io/raymondsteffann/msgpit:1
 ```
 
-Pin the major tag. Breaking changes to the provider routes or the `/api` contract get a major
-version bump.
+The image runs as an unprivileged user and takes ownership of `/data` on start, so an existing
+volume from an older version keeps working.
 
 ## Pointing your application at it
 
@@ -84,3 +107,19 @@ Note that it is flagged UCS-2: the emoji costs you 90 characters of capacity.
 
 Mount `/data` on a volume if you want captured messages to survive a container restart. Losing
 them is a supported outcome, not a failure.
+
+`MSGPIT_IMAGE` is not read by msgpit itself: it is the variable the Docksal snippet above uses so
+a project can pin or override the image without editing the shared config.
+
+## When something is wrong
+
+`fin up` waits for every container in the project to become healthy and fails the whole project if
+one of them does not. So if msgpit cannot start, your project will not either. Check it with:
+
+```bash
+fin logs msgpit
+curl -s http://msgpit:8080/healthz
+```
+
+The health endpoint answers `{"status":"ok","version":"..."}`, which also tells you which build is
+actually running.

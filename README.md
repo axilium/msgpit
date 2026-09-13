@@ -26,14 +26,17 @@ As a Docksal service, add to `.docksal/docksal.yml`:
 services:
   msgpit:
     hostname: msgpit
-    image: ghcr.io/<org>/msgpit:1
+    image: ${MSGPIT_IMAGE:-ghcr.io/raymondsteffann/msgpit:1}
     volumes:
       - msgpit_data:/data
     labels:
-      - io.docksal.virtual-host=msgpit.${VIRTUAL_HOST}
+      - io.docksal.virtual-host=msgpit.${VIRTUAL_HOST},msgpit.${VIRTUAL_HOST}.*
       - io.docksal.virtual-port=8080
+      - io.docksal.cert-name=${VIRTUAL_HOST_CERT_NAME:-none}
     environment:
       - MSGPIT_SPRYNG_DLR_URL=http://web/webhooks/spryng
+    healthcheck:
+      interval: ${DOCKSAL_CONTAINER_HEALTHCHECK_INTERVAL:-10s}
 
 volumes:
   msgpit_data:
@@ -42,33 +45,14 @@ volumes:
 Or plain Docker:
 
 ```bash
-docker run -p 8080:8080 ghcr.io/<org>/msgpit:1
+docker run -p 8080:8080 -v msgpit_data:/data ghcr.io/raymondsteffann/msgpit:1
 ```
 
 The UI is on port 8080. Other containers reach the API at `http://msgpit:8080`.
 
-Pin the major tag (`:1`). Breaking changes to routes or the `/api` contract get a major bump.
-
-## Providers
-
-### Spryng
-
-API **v2** only. Base URL:
-
-```
-http://msgpit:8080/spryng/v2
-```
-
-The official PHP SDK accepts a base URL with a path, so this works as a drop-in without patching
-anything. Authentication is `X-Api-Key`; msgpit checks the header is present and never looks at
-the value.
-
-Implemented: `POST /v2/messages` (202) and `GET /v2/balance` (201).
-
-Spryng has no callback URL in the send request, since webhooks are configured account-wide. Set
-`MSGPIT_SPRYNG_DLR_URL` to the endpoint in your app that would receive them.
-
-See `src/Provider/Spryng/CLAUDE.md` for the full API notes.
+Pin the major tag (`:1`). Breaking changes to routes or the `/api` contract get a major bump. To
+try a development build in one project, set `MSGPIT_IMAGE=ghcr.io/raymondsteffann/msgpit:dev` in
+`.docksal/docksal-local.env`.
 
 ## Documentation
 
@@ -137,9 +121,22 @@ and carries the vhost label.
 ```bash
 fin up                  # UI at http://msgpit.docksal.site
 fin exec composer install
-fin exec composer test  # PHPUnit plus the Node tests for the Markdown renderer
+fin exec composer test  # PHPUnit, the Markdown renderer, and the release versioning
 fin exec composer stan  # PHPStan, level max
 ```
+
+## Releasing
+
+Every push to `main` publishes a release. The version comes from the conventional commits since
+the last tag: a breaking change bumps major, a `feat:` bumps minor, anything else bumps patch. The
+workflow tags the commit, creates the GitHub release and pushes `X.Y.Z`, `X.Y`, `X` and `latest`
+to `ghcr.io/raymondsteffann/msgpit` for amd64 and arm64.
+
+Pushes to `dev` publish `:dev` and `:dev-<sha>` without tagging or releasing anything, so a
+project can try a build before it lands.
+
+There is nothing to bump by hand. `.github/next-version.sh` decides the number and is covered by
+`tests/Shell/next-version.test.sh`.
 
 The source is mounted over `/app`, so changes are live without rebuilding. Composer is dev
 tooling only: the runtime registers its own autoloader and needs no `vendor/`.

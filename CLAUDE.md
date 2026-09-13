@@ -209,10 +209,33 @@ Manual testing: send requests with curl from the `cli` container to `http://msgp
 
 ## Release
 
-- GitHub Actions builds a multi-arch image on tag `v*` and pushes to `ghcr.io/<org>/msgpit` with tags
-  `X.Y.Z`, `X.Y`, `X`, `latest`.
-- Consuming projects pin the major tag (`:1`). Breaking changes to routes or the `/api` contract
-  require a major bump.
+Image: `ghcr.io/raymondsteffann/msgpit`, built for amd64 and arm64.
+
+- **Every push to `main` releases.** `.github/next-version.sh` derives the version from the
+  conventional commits since the last `v*` tag: a breaking change (`!` or `BREAKING CHANGE`) bumps
+  major, `feat:` bumps minor, anything else bumps patch. The workflow then tags the commit, creates
+  the GitHub release, and pushes `X.Y.Z`, `X.Y`, `X` and `latest`.
+- **Every push to `dev`** publishes `:dev` and `:dev-<sha>`. No tag, no release.
+- Nothing is versioned by hand. Changing how the version is decided means changing that script, and
+  `tests/Shell/next-version.test.sh` runs the real script against throwaway repositories.
+- Consuming projects pin the major tag (`:1`) through `${MSGPIT_IMAGE:-...}`, so a project can
+  point at `:dev` from `docksal-local.env` without touching shared config.
+- Distribution is a yml snippet in the README, deliberately not a Docksal addon: `fin addon install`
+  only reads from a hardcoded `master` branch on raw.githubusercontent.com, which is more machinery
+  than a ten line service block deserves.
+
+### The image
+
+- Runs as `www-data`. `docker-entrypoint.sh` starts as root only to take ownership of `/data`,
+  then drops privileges with `su-exec`. This is what lets an existing volume from an older,
+  root-only version keep working, and it is why there is no `USER` line in the Dockerfile.
+- Ships `docs/`, because the UI serves the reference pages from it. Forgetting this leaves the
+  Reference section empty in the published image while it works fine locally, where the source is
+  mounted over `/app`.
+- Has a `HEALTHCHECK`. `fin up` fails the **whole project** if any container is unhealthy, so keep
+  it fast and give it a start period.
+- CI builds the image and exercises it without the source mounted, which is the one thing local
+  development never covers.
 
 ## Documentation
 
