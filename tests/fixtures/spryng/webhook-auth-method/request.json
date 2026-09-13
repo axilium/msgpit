@@ -1,0 +1,6 @@
+{
+    "method": "PUT",
+    "path": "/spryng/v2/webhooks/authentication-methods",
+    "headers": {"x-api-key": "test-key-abcdef123456", "content-type": "application/json"},
+    "body": {"apiKey": {"key": "X-InvalPool-Webhook", "value": "secret", "asQueryParam": false}}
+}

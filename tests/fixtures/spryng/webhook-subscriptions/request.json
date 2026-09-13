@@ -1,0 +1,5 @@
+{
+    "method": "GET",
+    "path": "/spryng/v2/webhooks/subscriptions",
+    "headers": {"x-api-key": "test-key-abcdef123456", "accountreference": "SPNL0000000"}
+}

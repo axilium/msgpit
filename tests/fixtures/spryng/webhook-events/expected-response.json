@@ -1,0 +1,11 @@
+{
+    "status": 200,
+    "body": {
+        "data": [
+            {"id": "sms-message-delivered", "name": "SMS delivered"},
+            {"id": "sms-message-failed", "name": "SMS failed"},
+            {"id": "sms-message-received", "name": "SMS received"},
+            {"id": "sms-inbound-opted-out", "name": "Opted out"}
+        ]
+    }
+}

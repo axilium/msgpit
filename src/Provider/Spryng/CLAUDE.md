@@ -30,10 +30,26 @@ misspell the header as `AcccountReference`; that is a typo in the docs, not a se
 | Method | Path | Status | Notes |
 |---|---|---|---|
 | POST | `/v2/messages` | **202** | Send. Not 200. |
-| GET | `/v2/balance` | **201** | Documented as 201 Created, and amounts are strings. |
+| GET | `/v2/balance` | 200 | Wrapped in `data`. See the note below. |
+| GET | `/v2/webhooks/events` | 200 | `data` is a list of `{id, name, description}`. |
+| GET | `/v2/webhooks/subscriptions` | 200 | `data.events`, derived from `MSGPIT_SPRYNG_DLR_URL`. |
+| POST | `/v2/webhooks/subscriptions` | **201** | Accepted and forgotten. |
+| PUT | `/v2/webhooks/authentication-methods` | 200 | Accepted and forgotten. |
+| DELETE | `/v2/webhooks/events/{event}` | 204 | |
 
 The real API has 42 paths (contacts, groups, templates, schedules, throttling, webhooks, inbox,
 url-shortener). We only add what our apps actually call.
+
+### The balance response contradicts itself
+
+The portal page and the generated OpenAPI both say **201 Created** with a bare
+`{"available", "reserved"}` body. Two independent clients disagree: the official SDK reads it
+through its `data()` helper, and a real consuming application expects `200` with `data.available`.
+The OpenAPI is generated from the same portal page, so it is not a second source.
+
+We follow the clients: **200, wrapped**. This is the one place where we knowingly contradict the
+documentation, and it is worth re-checking against the live API when someone has a key, because
+getting it wrong here means the emulation is friendlier than production.
 
 ## Send request
 
@@ -93,8 +109,26 @@ Spryng has **no callback URL in the send request**. Webhooks are configured acco
 `sms-message-received`, `sms-inbound-opted-out`). So our callback URL comes from
 `MSGPIT_SPRYNG_DLR_URL`; without it the UI still flips the status but sends nothing.
 
-The callback payload is **PascalCase**, unlike the rest of the API, and drops the leading plus
-from the number:
+We keep no subscription state: the subscribe and authentication-method endpoints accept the call
+and answer realistically, but change nothing. `GET /v2/webhooks/subscriptions` reports the URL
+from the environment, which is more honest than an empty list because it is what msgpit will
+actually call. Note that clients disagree on the event names: the API returns
+`sms-message-delivered` while at least one real client sends `message-delivered`.
+
+The callback carries two things that are easy to miss and break the receiving end silently:
+
+- **`Metadata`**, spelled with a lowercase d even though it goes in as `metaData`. It is the
+  recipient's `metaData` from the send request, echoed back. Applications key their own records
+  off it, so a report without it is dropped on the floor with no error anywhere. It is an empty
+  object rather than an empty array when there was none, because a client expecting an object
+  chokes on `[]`.
+- **An authentication header.** The real Spryng authenticates itself to your endpoint with a
+  header you register through `PUT /v2/webhooks/authentication-methods`. We take it from
+  `MSGPIT_SPRYNG_DLR_HEADER` and `MSGPIT_SPRYNG_DLR_SECRET` instead, so it works whether or not
+  the app ever made that call. Both must be set, or neither is sent.
+
+The payload is **PascalCase**, unlike the rest of the API, and drops the leading plus from the
+number:
 
 ```json
 {

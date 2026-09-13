@@ -1,0 +1,5 @@
+{
+    "method": "DELETE",
+    "path": "/spryng/v2/webhooks/events/message-delivered",
+    "headers": {"x-api-key": "test-key-abcdef123456"}
+}

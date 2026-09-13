@@ -73,9 +73,13 @@ final class ProviderContractTest extends TestCase
         self::assertNotNull($response, "No route matched {$method} {$path}");
         self::assertSame($expected['status'], $response->status);
 
-        $actual = json_decode($response->body, true);
-        self::assertIsArray($actual);
-        self::assertMatchesExpectation($expected['body'], $actual, 'response body');
+        if ($response->body === '') {
+            self::assertSame([], $expected['body'], 'A response without a body cannot match one');
+        } else {
+            $actual = json_decode($response->body, true);
+            self::assertIsArray($actual);
+            self::assertMatchesExpectation($expected['body'], $actual, 'response body');
+        }
 
         self::assertStoredMessages($directory, $storage);
     }

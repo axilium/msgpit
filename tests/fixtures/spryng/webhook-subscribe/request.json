@@ -1,0 +1,12 @@
+{
+    "method": "POST",
+    "path": "/spryng/v2/webhooks/subscriptions",
+    "headers": {"x-api-key": "test-key-abcdef123456", "content-type": "application/json"},
+    "body": [
+        {
+            "eventType": "message-delivered",
+            "callbacks": [{"url": "https://example.test/sms-status.php"}],
+            "requiresAuthentication": true
+        }
+    ]
+}

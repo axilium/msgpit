@@ -44,6 +44,11 @@ final class SpryngProvider implements Provider, SupportsDeliveryReports, Support
         return [
             new Route('POST', '/v2/messages', $this->send(...)),
             new Route('GET', '/v2/balance', $this->balance(...)),
+            new Route('GET', '/v2/webhooks/events', $this->events(...)),
+            new Route('GET', '/v2/webhooks/subscriptions', $this->subscriptions(...)),
+            new Route('POST', '/v2/webhooks/subscriptions', $this->subscribe(...)),
+            new Route('PUT', '/v2/webhooks/authentication-methods', $this->authenticationMethod(...)),
+            new Route('DELETE', '/v2/webhooks/events/{event}', $this->unsubscribe(...)),
         ];
     }
 
@@ -103,8 +108,88 @@ final class SpryngProvider implements Provider, SupportsDeliveryReports, Support
             return new Capture([], self::unauthenticated($request->path));
         }
 
-        // Spryng documents 201 here, and amounts as strings. Both are intentional.
-        return new Capture([], Response::json(['available' => '2951.73346', 'reserved' => '0'], 201));
+        // The docs claim 201 and no data wrapper here. Real clients disagree, and they carry
+        // details the docs never mention (the "Wallet management" 400 for invoiced accounts), so
+        // we follow the clients: 200, wrapped, amounts as strings.
+        return new Capture([], Response::json([
+            'data' => ['available' => '2951.73346', 'reserved' => '0'],
+        ]));
+    }
+
+    /**
+     * The events Spryng can notify about. Names as the API returns them, which is not what every
+     * client sends: some use the shorter "message-delivered".
+     *
+     * @param array<string, string> $params
+     */
+    private function events(Request $request, array $params): Capture
+    {
+        if (!$this->isAuthenticated($request)) {
+            return new Capture([], self::unauthenticated($request->path));
+        }
+
+        return new Capture([], Response::json(['data' => [
+            ['id' => 'sms-message-delivered', 'name' => 'SMS delivered', 'description' => 'An outbound message was delivered.'],
+            ['id' => 'sms-message-failed', 'name' => 'SMS failed', 'description' => 'An outbound message could not be delivered.'],
+            ['id' => 'sms-message-received', 'name' => 'SMS received', 'description' => 'An inbound message arrived.'],
+            ['id' => 'sms-inbound-opted-out', 'name' => 'Opted out', 'description' => 'A recipient opted out.'],
+        ]]));
+    }
+
+    /**
+     * We keep no subscription state: the callback URL comes from MSGPIT_SPRYNG_DLR_URL. Reporting
+     * that URL back is more honest than an empty list, because it is what msgpit will actually
+     * call.
+     *
+     * @param array<string, string> $params
+     */
+    private function subscriptions(Request $request, array $params): Capture
+    {
+        if (!$this->isAuthenticated($request)) {
+            return new Capture([], self::unauthenticated($request->path));
+        }
+
+        $url = self::callbackUrl();
+        $events = $url === null ? [] : array_map(static fn (string $event): array => [
+            'eventType' => $event,
+            'callbacks' => [['url' => $url]],
+            'requiresAuthentication' => self::authenticationHeader() !== null,
+        ], ['sms-message-delivered', 'sms-message-failed']);
+
+        return new Capture([], Response::json(['data' => ['events' => $events]]));
+    }
+
+    /** @param array<string, string> $params */
+    private function subscribe(Request $request, array $params): Capture
+    {
+        if (!$this->isAuthenticated($request)) {
+            return new Capture([], self::unauthenticated($request->path));
+        }
+
+        // Accepted and forgotten: msgpit calls back to MSGPIT_SPRYNG_DLR_URL regardless.
+        return new Capture([], Response::json(['data' => ['created' => true]], 201));
+    }
+
+    /** @param array<string, string> $params */
+    private function authenticationMethod(Request $request, array $params): Capture
+    {
+        if (!$this->isAuthenticated($request)) {
+            return new Capture([], self::unauthenticated($request->path));
+        }
+
+        // The header msgpit sends comes from the environment, not from this call, so that a
+        // delivery report works even if the app never registers anything.
+        return new Capture([], Response::json(['data' => ['updated' => true]]));
+    }
+
+    /** @param array<string, string> $params */
+    private function unsubscribe(Request $request, array $params): Capture
+    {
+        if (!$this->isAuthenticated($request)) {
+            return new Capture([], self::unauthenticated($request->path));
+        }
+
+        return new Capture([], new Response(204));
     }
 
     /**
@@ -198,10 +283,9 @@ final class SpryngProvider implements Provider, SupportsDeliveryReports, Support
 
     public function deliveryReport(Message $message, DeliveryStatus $status): ?OutgoingRequest
     {
-        // Spryng has no callback URL in the send request: webhooks are configured account-wide.
-        $url = getenv('MSGPIT_SPRYNG_DLR_URL');
+        $url = self::callbackUrl();
 
-        if (!is_string($url) || $url === '') {
+        if ($url === null) {
             return null;
         }
 
@@ -228,15 +312,53 @@ final class SpryngProvider implements Provider, SupportsDeliveryReports, Support
                 'Originator' => $message->from,
                 'Msisdn' => ltrim($message->to, '+'),
                 'SenderType' => 'AlphanumericSenderId',
+                // Spelled with a lowercase d, unlike the metaData that went in. Apps key their
+                // own records off this, so a report without it is silently discarded.
+                'Metadata' => $message->meta['recipientMetaData'] ?? new \stdClass(),
             ]],
         ];
+
+        $headers = ['Content-Type' => 'application/json'];
+        $authentication = self::authenticationHeader();
+
+        if ($authentication !== null) {
+            [$name, $value] = $authentication;
+            $headers[$name] = $value;
+        }
 
         return new OutgoingRequest(
             method: 'POST',
             url: $url,
-            headers: ['Content-Type' => 'application/json'],
+            headers: $headers,
             body: json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
         );
+    }
+
+    /** Spryng has no callback URL in the send request: webhooks are configured account-wide. */
+    private static function callbackUrl(): ?string
+    {
+        $url = getenv('MSGPIT_SPRYNG_DLR_URL');
+
+        return is_string($url) && $url !== '' ? $url : null;
+    }
+
+    /**
+     * The real Spryng authenticates itself to your webhook with a header you register through
+     * PUT /v2/webhooks/authentication-methods. We take it from the environment instead, so a
+     * delivery report works whether or not the app ever made that call.
+     *
+     * @return array{0: string, 1: string}|null
+     */
+    private static function authenticationHeader(): ?array
+    {
+        $name = getenv('MSGPIT_SPRYNG_DLR_HEADER');
+        $value = getenv('MSGPIT_SPRYNG_DLR_SECRET');
+
+        if (!is_string($name) || $name === '' || !is_string($value) || $value === '') {
+            return null;
+        }
+
+        return [$name, $value];
     }
 
     public function errorResponse(Scenario $scenario): Response
