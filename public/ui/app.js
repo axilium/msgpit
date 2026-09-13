@@ -387,7 +387,8 @@ const refresh = async () => {
 const loadProviders = async () => {
     const {providers, version} = await api('/providers');
 
-    el.version.textContent = version === 'dev' ? 'dev' : `v${version}`;
+    // Only a real release gets the v prefix; "dev" and "dev-<sha>" stand on their own.
+    el.version.textContent = /^\d/.test(version) ? `v${version}` : version;
 
     // Providers with no messages yet should still be visible in the sidebar.
     if (providers.length > 0 && state.messages.length === 0) {
