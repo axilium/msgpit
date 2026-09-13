@@ -168,7 +168,9 @@ was sent, then clear).
 | `MSGPIT_DB` | `/data/msgpit.sqlite` | SQLite path |
 | `MSGPIT_PROVIDERS` | all | Comma-separated provider ids to enable |
 | `MSGPIT_MAX_MESSAGES` | `1000` | Oldest messages are pruned beyond this |
-| `MSGPIT_<PROVIDER>_DLR_URL` | - | Callback URL for delivery reports, e.g. `http://web/webhooks/spryng` |
+| `MSGPIT_<PROVIDER>_DLR_URL` | - | Callback URL for delivery reports, e.g. `http://web/sms-status.php` |
+| `MSGPIT_<PROVIDER>_DLR_HEADER` | - | Header name authenticating that callback |
+| `MSGPIT_<PROVIDER>_DLR_SECRET` | - | Its value. Both or neither |
 
 ## Adding a provider (checklist)
 

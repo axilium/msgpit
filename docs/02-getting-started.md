@@ -19,7 +19,7 @@ services:
       - io.docksal.virtual-port=8080
       - io.docksal.cert-name=${VIRTUAL_HOST_CERT_NAME:-none}
     environment:
-      - MSGPIT_SPRYNG_DLR_URL=http://web/webhooks/spryng
+      - MSGPIT_SPRYNG_DLR_URL=http://web/sms-status.php
     healthcheck:
       interval: ${DOCKSAL_CONTAINER_HEALTHCHECK_INTERVAL:-10s}
 
@@ -104,6 +104,8 @@ Note that it is flagged UCS-2: the emoji costs you 90 characters of capacity.
 | `MSGPIT_PROVIDERS` | all | Comma-separated provider ids to enable |
 | `MSGPIT_MAX_MESSAGES` | `1000` | Older messages are pruned beyond this |
 | `MSGPIT_<PROVIDER>_DLR_URL` | - | Delivery-report callback into your app |
+| `MSGPIT_<PROVIDER>_DLR_HEADER` | - | Header name to authenticate that callback |
+| `MSGPIT_<PROVIDER>_DLR_SECRET` | - | Its value. Set both or neither |
 
 Mount `/data` on a volume if you want captured messages to survive a container restart. Losing
 them is a supported outcome, not a failure.

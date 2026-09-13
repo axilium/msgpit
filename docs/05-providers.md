@@ -30,10 +30,22 @@ carry an `AccountReference` header, while the send endpoint takes the account in
 | Method | Path | Status |
 |---|---|---|
 | POST | `/v2/messages` | 202 |
-| GET | `/v2/balance` | 201 |
+| GET | `/v2/balance` | 200 |
+| GET | `/v2/webhooks/events` | 200 |
+| GET | `/v2/webhooks/subscriptions` | 200 |
+| POST | `/v2/webhooks/subscriptions` | 201 |
+| PUT | `/v2/webhooks/authentication-methods` | 200 |
+| DELETE | `/v2/webhooks/events/{event}` | 204 |
 
-Both status codes are what the real API returns, odd as they look. The send endpoint answers 202
-because acceptance is not delivery, and the documented success status for balance really is 201.
+The send endpoint answers 202 rather than 200, because acceptance is not delivery.
+
+The webhook endpoints exist so an application's own settings screen keeps working locally. msgpit
+keeps no subscription state: it accepts a registration and answers realistically, but the callback
+URL it actually uses is the one in `MSGPIT_SPRYNG_DLR_URL`.
+
+Balance is the one place where msgpit knowingly contradicts Spryng's documentation. The portal
+says 201 with an unwrapped body; both the official SDK and a real consuming application expect 200
+with a `data` wrapper, so that is what msgpit returns.
 
 **Recipients** are objects with an `msisdn` in E.164 *with* a plus. One request can carry up to
 50,000 of them and returns one `requestId` plus one message id per recipient. msgpit stores one
@@ -50,6 +62,14 @@ failures are 400.
 account-wide. Set `MSGPIT_SPRYNG_DLR_URL` to the endpoint in your application. The payload msgpit
 sends is PascalCase (`RequestId`, `Messages[].MessageId`, `MessageParts`, `MessageCoding`), unlike
 the rest of the API, and drops the leading plus from the number, because that is what Spryng does.
+
+Two details decide whether your endpoint accepts the report:
+
+- The `metaData` you sent per recipient comes back as `Metadata`, with a lowercase d. Most
+  applications use it to find their own record, so without it the report is silently ignored.
+- If your endpoint requires a shared secret, set `MSGPIT_SPRYNG_DLR_HEADER` and
+  `MSGPIT_SPRYNG_DLR_SECRET`. msgpit then sends that header the way the real Spryng does once you
+  register an authentication method. Set both or neither.
 
 Full API notes, including the casing inconsistencies worth knowing about, are in
 `src/Provider/Spryng/CLAUDE.md` in the repository.

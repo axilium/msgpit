@@ -34,7 +34,7 @@ services:
       - io.docksal.virtual-port=8080
       - io.docksal.cert-name=${VIRTUAL_HOST_CERT_NAME:-none}
     environment:
-      - MSGPIT_SPRYNG_DLR_URL=http://web/webhooks/spryng
+      - MSGPIT_SPRYNG_DLR_URL=http://web/sms-status.php
     healthcheck:
       interval: ${DOCKSAL_CONTAINER_HEALTHCHECK_INTERVAL:-10s}
 
@@ -109,7 +109,9 @@ See [Failure scenarios](docs/03-scenarios.md).
 | `MSGPIT_DB` | `/data/msgpit.sqlite` | SQLite path |
 | `MSGPIT_PROVIDERS` | all | Comma-separated provider ids to enable |
 | `MSGPIT_MAX_MESSAGES` | `1000` | Older messages are pruned beyond this |
-| `MSGPIT_<PROVIDER>_DLR_URL` | - | Delivery-report callback, e.g. `http://web/webhooks/spryng` |
+| `MSGPIT_<PROVIDER>_DLR_URL` | - | Delivery-report callback, e.g. `http://web/sms-status.php` |
+| `MSGPIT_<PROVIDER>_DLR_HEADER` | - | Header name to authenticate that callback |
+| `MSGPIT_<PROVIDER>_DLR_SECRET` | - | Its value. Set both or neither |
 
 Data lives in SQLite at `MSGPIT_DB`. Losing it on a container reset is fine and expected.
 
