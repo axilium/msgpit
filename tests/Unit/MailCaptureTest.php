@@ -198,6 +198,17 @@ final class MailCaptureTest extends TestCase
         self::assertSame([], $this->storage->all());
     }
 
+    public function testASpamVerdictEndsUpInTheMetadata(): void
+    {
+        $capture = new MailCapture($this->storage, new \Msgpit\Core\SpamAssassin('127.0.0.1:1', timeout: 1));
+
+        $capture->capture(new Envelope('sender@example.test', ['a@example.test'], $this->fixture('plain-text.eml')));
+
+        // Nothing listens on that port, so there is no verdict, and the message is stored anyway.
+        self::assertCount(1, $this->storage->all());
+        self::assertArrayNotHasKey('spam', $this->storage->all()[0]->meta);
+    }
+
     public function testItSurvivesAMessageThatIsNotReallyMime(): void
     {
         $this->capture->capture(new Envelope('sender@example.test', ['a@example.test'], 'geen headers, geen mime'));

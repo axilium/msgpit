@@ -31,6 +31,12 @@ services:
       - MSGPIT_MAX_MESSAGES
       # Delivery-report callback per provider. Set in .docksal/docksal-local.env.
       - MSGPIT_SPRYNG_DLR_URL
+      - MSGPIT_SPAMASSASSIN=spamassassin:783
+
+  # The same image Mailpit is pointed at, so a project keeps the spam scoring it already had.
+  spamassassin:
+    hostname: spamassassin
+    image: instantlinux/spamassassin:latest
 
 volumes:
   msgpit_data:

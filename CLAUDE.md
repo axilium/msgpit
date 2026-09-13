@@ -67,6 +67,20 @@ with it: no POP3, no link checking, no Outlook compatibility report.
 - Docksal projects reach it through the network aliases `mail` and `mailpit`, so the sendmail
   configuration that Docksal's cli image ships (`msmtp ... --host=mail --port=1025`) needs no change.
 
+### Spam scoring
+
+`MSGPIT_SPAMASSASSIN` (`host:port`) points at a spamd, the same spelling Mailpit uses. The protocol
+is a REPORT request and a reply with the score and the rules; nothing is installed in our image.
+
+- **Best effort, always.** A daemon that is down, slow or absent means no score, never a failed
+  capture. A catcher that drops mail because a side service is unhappy is worse than one that shows
+  no number.
+- The rule table is the point, not the score: it names which line of a template is costing points.
+  A wrapped description belongs to the rule above it, which is the one parsing subtlety here.
+- A score computed in isolation has no `Received` headers, no SPF or DKIM and no reputation, so it
+  says something about content and nothing about what a real filter would decide. Do not present
+  it as a prediction.
+
 ## Architecture
 
 ```

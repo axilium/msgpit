@@ -37,6 +37,7 @@ const state = {
     signature: '',
     touched: false,
     doc: null,
+    mailBody: 'html',
     scenarios: [],
     unread: 0,
     dlrProviders: [],
@@ -286,20 +287,73 @@ const mailHeaders = (message) => {
     `).join('')}</dl>`;
 };
 
-const mailPanels = {
-    message: (message) => `
-        <h3>${message.html === null ? 'Message' : 'As the recipient sees it'}</h3>
-        ${message.html === null
-            ? `<p class="body-text">${escapeHtml(message.text ?? message.body) || '<em>empty</em>'}</p>`
-            : renderMailPreview(message)}
-        <h3>Headers</h3>
-        ${mailHeaders(message)}
-    `,
+/**
+ * Which body to show. A mail usually carries both, and the plain text alternative is the one
+ * people forget to keep in step, so switching has to be one click rather than a different tab.
+ */
+const bodyToggle = (message) => {
+    if (message.html === null || message.text === null) {
+        return '';
+    }
 
-    text: (message) => `
-        <h3>Plain text alternative</h3>
-        <p class="body-text">${escapeHtml(message.text ?? '') || '<em>empty</em>'}</p>
-    `,
+    const option = (value, label) => `
+        <button type="button" data-body="${value}" aria-pressed="${state.mailBody === value}">${label}</button>
+    `;
+
+    return `<div class="switch" role="group" aria-label="Message format">
+        ${option('html', 'HTML')}${option('text', 'Plain text')}
+    </div>`;
+};
+
+const mailPanels = {
+    message: (message) => {
+        const showHtml = message.html !== null && (state.mailBody === 'html' || message.text === null);
+
+        return `
+            <h3>Headers</h3>
+            ${mailHeaders(message)}
+            <div class="body-head">
+                <h3>${showHtml ? 'As the recipient sees it' : 'Plain text'}</h3>
+                ${bodyToggle(message)}
+            </div>
+            ${showHtml
+                ? renderMailPreview(message)
+                : `<p class="body-text">${escapeHtml(message.text ?? message.body) || '<em>empty</em>'}</p>`}
+        `;
+    },
+
+    spam: (message) => {
+        const spam = message.meta.spam;
+        const share = Math.max(0, Math.min(1, spam.score / Math.max(spam.threshold, 0.1)));
+
+        const rows = spam.rules.map((rule) => `
+            <tr class="${rule.points > 0 ? 'costly' : ''}">
+                <td class="points">${rule.points > 0 ? '+' : ''}${rule.points.toFixed(1)}</td>
+                <td class="rule">${escapeHtml(rule.name)}</td>
+                <td>${escapeHtml(rule.description)}</td>
+            </tr>
+        `).join('');
+
+        return `
+            <h3>Score</h3>
+            <p class="spam-score ${spam.spam ? 'is-spam' : ''}">
+                <strong>${spam.score.toFixed(1)}</strong>
+                <span>of ${spam.threshold.toFixed(1)}</span>
+                <span class="tag ${spam.spam ? 'status-failed' : 'status-delivered'}">
+                    ${spam.spam ? 'would be marked as spam' : 'would pass'}
+                </span>
+            </p>
+            <div class="meter">
+                <span class="meter-part${spam.spam ? ' ucs2' : ''}">
+                    <span class="meter-fill" style="width: ${share * 100}%"></span>
+                </span>
+            </div>
+            ${spam.rules.length === 0
+                ? '<p class="empty">No rules fired.</p>'
+                : `<h3>What it reacted to</h3>
+                   <div class="table-scroll"><table class="rules"><tbody>${rows}</tbody></table></div>`}
+        `;
+    },
 
     attachments: (message) => {
         const attachments = (message.parts ?? []).filter((part) => part.disposition === 'attachment');
@@ -380,13 +434,12 @@ const tabsFor = (message) => {
     if (isMail(message)) {
         const attachments = (message.parts ?? []).filter((part) => part.disposition === 'attachment');
 
-        // Only worth a tab when there is a plain text alternative to compare against.
-        if (message.text !== null && message.html !== null) {
-            tabs.push(['text', 'Text', null]);
-        }
-
         if (attachments.length > 0) {
             tabs.push(['attachments', 'Attachments', attachments.length]);
+        }
+
+        if (message.meta.spam) {
+            tabs.push(['spam', 'Spam', message.meta.spam.score.toFixed(1)]);
         }
     }
 
@@ -433,6 +486,13 @@ const renderDetail = (message) => {
         button.addEventListener('click', () => {
             state.tab = button.dataset.tab;
             history.replaceState(null, '', `#${state.tab}`);
+            renderDetail(message);
+        });
+    });
+
+    el.detail.querySelectorAll('[data-body]').forEach((button) => {
+        button.addEventListener('click', () => {
+            state.mailBody = button.dataset.body;
             renderDetail(message);
         });
     });

@@ -17,13 +17,19 @@ use Msgpit\Smtp\Envelope;
  */
 final readonly class MailCapture
 {
-    public function __construct(private Storage $storage) {}
+    public function __construct(
+        private Storage $storage,
+        private ?SpamAssassin $spamAssassin = null,
+    ) {}
 
     public function capture(Envelope $envelope): void
     {
         $parsed = Parser::parse($envelope->data);
         $batchId = Uuid::v4();
         $messages = [];
+
+        // Best effort: a spamd that is down must not cost us the message.
+        $spam = $this->spamAssassin?->check($envelope->data);
 
         foreach ($envelope->recipients as $recipient) {
             $messages[] = Message::create(
@@ -34,7 +40,7 @@ final readonly class MailCapture
                 body: $parsed->preview(),
                 from: $parsed->from !== '' ? $parsed->from : $envelope->sender,
                 providerRef: $parsed->headers['message-id'] ?? null,
-                meta: self::meta($parsed, $envelope),
+                meta: self::meta($parsed, $envelope, $spam),
             );
         }
 
@@ -46,7 +52,7 @@ final readonly class MailCapture
     }
 
     /** @return array<string, mixed> */
-    private static function meta(ParsedMessage $parsed, Envelope $envelope): array
+    private static function meta(ParsedMessage $parsed, Envelope $envelope, ?SpamReport $spam): array
     {
         $meta = [
             'subject' => $parsed->subject,
@@ -58,6 +64,7 @@ final readonly class MailCapture
             'date' => $parsed->headers['date'] ?? null,
             'hasHtml' => $parsed->html() !== null,
             'attachments' => count($parsed->attachments()),
+            'spam' => $spam?->toArray(),
         ];
 
         return array_filter($meta, static fn (mixed $value): bool => $value !== null && $value !== []);

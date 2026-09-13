@@ -650,6 +650,49 @@ dl.fields dd {
     color-scheme: light;
 }
 
+/* A heading with a control on the same line. */
+.body-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 22px 0 8px;
+}
+
+.body-head h3 {
+    margin: 0;
+}
+
+.switch {
+    display: inline-flex;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.switch button {
+    border: 0;
+    border-radius: 0;
+    padding: 3px 10px;
+    font-size: 12px;
+    background: var(--bg-panel);
+    color: var(--text-soft);
+}
+
+.switch button + button {
+    border-left: 1px solid var(--border);
+}
+
+.switch button[aria-pressed="true"] {
+    background: var(--accent);
+    color: var(--on-accent);
+    font-weight: 600;
+}
+
+.switch button[aria-pressed="true"]:hover {
+    background: var(--accent);
+}
+
 .attachments {
     margin: 0;
     padding: 0;
@@ -684,6 +727,62 @@ dl.fields dd {
     color: var(--text-faint);
     font-size: 12px;
     white-space: nowrap;
+}
+
+/* Spam score */
+
+.spam-score {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 0 0 10px;
+}
+
+.spam-score strong {
+    font-size: 26px;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    color: var(--ok);
+}
+
+.spam-score.is-spam strong {
+    color: var(--danger);
+}
+
+.spam-score span {
+    color: var(--text-soft);
+}
+
+table.rules {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 12.5px;
+}
+
+table.rules td {
+    padding: 5px 12px 5px 0;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+}
+
+table.rules .points {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+    color: var(--text-faint);
+}
+
+table.rules .costly .points {
+    color: var(--warn);
+    font-weight: 600;
+}
+
+table.rules .rule {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    white-space: nowrap;
+    color: var(--text-soft);
 }
 
 /* Segment meter */

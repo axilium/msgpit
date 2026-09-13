@@ -106,6 +106,9 @@ Note that it is flagged UCS-2: the emoji costs you 90 characters of capacity.
 | `MSGPIT_<PROVIDER>_DLR_URL` | - | Delivery-report callback into your app |
 | `MSGPIT_<PROVIDER>_DLR_HEADER` | - | Header name to authenticate that callback |
 | `MSGPIT_<PROVIDER>_DLR_SECRET` | - | Its value. Set both or neither |
+| `MSGPIT_SMTP` | `1` | Set to `0` to run without the SMTP listener |
+| `MSGPIT_SMTP_PORT` | `1025` | Port the SMTP listener binds to |
+| `MSGPIT_SPAMASSASSIN` | - | `host:port` of a spamd, to score captured mail |
 
 Mount `/data` on a volume if you want captured messages to survive a container restart. Losing
 them is a supported outcome, not a failure.

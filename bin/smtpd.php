@@ -11,6 +11,7 @@ declare(strict_types=1);
 require dirname(__DIR__) . '/bootstrap.php';
 
 use Msgpit\Core\MailCapture;
+use Msgpit\Core\SpamAssassin;
 use Msgpit\Core\Storage;
 use Msgpit\Smtp\Envelope;
 use Msgpit\Smtp\Server;
@@ -26,7 +27,12 @@ if ($env('MSGPIT_SMTP', '1') === '0') {
 }
 
 $storage = Storage::open($env('MSGPIT_DB', '/data/msgpit.sqlite'), (int) $env('MSGPIT_MAX_MESSAGES', '1000'));
-$capture = new MailCapture($storage);
+$spamAssassin = SpamAssassin::fromEnvironment();
+$capture = new MailCapture($storage, $spamAssassin);
+
+if ($spamAssassin !== null) {
+    fwrite(STDERR, 'smtp: scoring through spamassassin at ' . getenv('MSGPIT_SPAMASSASSIN') . "\n");
+}
 $port = (int) $env('MSGPIT_SMTP_PORT', '1025');
 
 $server = new Server(
