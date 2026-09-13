@@ -2,10 +2,12 @@
     "status": 200,
     "body": {
         "data": [
-            {"id": "sms-message-delivered", "name": "SMS delivered"},
-            {"id": "sms-message-failed", "name": "SMS failed"},
-            {"id": "sms-message-received", "name": "SMS received"},
-            {"id": "sms-inbound-opted-out", "name": "Opted out"}
+            {"id": "message-delivered", "name": "Message delivered"},
+            {"id": "message-failed", "name": "Message failed"},
+            {"id": "message-received", "name": "Message received"},
+            {"id": "inbound-opted-out", "name": "Opted out"},
+            {"id": "message-updated", "name": "Message updated"},
+            {"id": "schedule-updated", "name": "Schedule updated"}
         ]
     }
 }

@@ -26,6 +26,9 @@ use Msgpit\Http\Response;
  */
 final class SpryngProvider implements Provider, SupportsDeliveryReports, SupportsErrorScenarios
 {
+    /** The two events a delivery report can belong to, named as the events endpoint names them. */
+    private const DELIVERY_EVENTS = ['message-delivered', 'message-failed'];
+
     private const ACCOUNT_REFERENCE = '/^SPNL\d{7}$/';
     private const MSISDN = '/^\+[1-9]\d{6,14}$/';
 
@@ -117,8 +120,10 @@ final class SpryngProvider implements Provider, SupportsDeliveryReports, Support
     }
 
     /**
-     * The events Spryng can notify about. Names as the API returns them, which is not what every
-     * client sends: some use the shorter "message-delivered".
+     * The events the live API returns from this endpoint. The documentation calls them
+     * "sms-message-delivered" and so on; the endpoint itself has no "sms-" prefix and lists six
+     * rather than four. The endpoint wins: clients match their own subscriptions against this
+     * list, and a prefix that only exists in the docs leaves every event looking unsubscribed.
      *
      * @param array<string, string> $params
      */
@@ -128,12 +133,20 @@ final class SpryngProvider implements Provider, SupportsDeliveryReports, Support
             return new Capture([], self::unauthenticated($request->path));
         }
 
-        return new Capture([], Response::json(['data' => [
-            ['id' => 'sms-message-delivered', 'name' => 'SMS delivered', 'description' => 'An outbound message was delivered.'],
-            ['id' => 'sms-message-failed', 'name' => 'SMS failed', 'description' => 'An outbound message could not be delivered.'],
-            ['id' => 'sms-message-received', 'name' => 'SMS received', 'description' => 'An inbound message arrived.'],
-            ['id' => 'sms-inbound-opted-out', 'name' => 'Opted out', 'description' => 'A recipient opted out.'],
-        ]]));
+        $events = array_map(static fn (array $event): array => [
+            'id' => $event[0],
+            'name' => $event[1],
+            'description' => $event[2],
+        ], [
+            ['message-delivered', 'Message delivered', 'An outbound message reached the handset.'],
+            ['message-failed', 'Message failed', 'An outbound message could not be delivered.'],
+            ['message-received', 'Message received', 'An inbound message arrived on a VMN or shortcode.'],
+            ['inbound-opted-out', 'Opted out', 'A recipient opted out of further messages.'],
+            ['message-updated', 'Message updated', 'A message changed after it was submitted.'],
+            ['schedule-updated', 'Schedule updated', 'A scheduled send changed.'],
+        ]);
+
+        return new Capture([], Response::json(['data' => $events]));
     }
 
     /**
@@ -154,7 +167,7 @@ final class SpryngProvider implements Provider, SupportsDeliveryReports, Support
             'eventType' => $event,
             'callbacks' => [['url' => $url]],
             'requiresAuthentication' => self::authenticationHeader() !== null,
-        ], ['sms-message-delivered', 'sms-message-failed']);
+        ], self::DELIVERY_EVENTS);
 
         return new Capture([], Response::json(['data' => ['events' => $events]]));
     }

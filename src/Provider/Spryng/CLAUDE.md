@@ -105,15 +105,28 @@ Lowercase UUID v4 with dashes, one messageId per recipient in send order. The `r
 ## Delivery reports
 
 Spryng has **no callback URL in the send request**. Webhooks are configured account-wide through
-`POST /v2/webhooks/subscriptions`, per event (`sms-message-delivered`, `sms-message-failed`,
-`sms-message-received`, `sms-inbound-opted-out`). So our callback URL comes from
+`POST /v2/webhooks/subscriptions`, per event. So our callback URL comes from
 `MSGPIT_SPRYNG_DLR_URL`; without it the UI still flips the status but sends nothing.
 
 We keep no subscription state: the subscribe and authentication-method endpoints accept the call
 and answer realistically, but change nothing. `GET /v2/webhooks/subscriptions` reports the URL
 from the environment, which is more honest than an empty list because it is what msgpit will
-actually call. Note that clients disagree on the event names: the API returns
-`sms-message-delivered` while at least one real client sends `message-delivered`.
+actually call.
+
+### The event names in the documentation are wrong
+
+The docs name four events with an `sms-` prefix: `sms-message-delivered` and friends. The live
+`GET /v2/webhooks/events` returns **six, without the prefix**:
+
+```
+message-delivered   message-failed     message-received
+inbound-opted-out   message-updated    schedule-updated
+```
+
+Go by the endpoint. A client lists its own subscriptions and matches them against this catalogue
+to show which events it listens to; with the documented names nothing matches and every event
+looks unsubscribed, with no error to explain it. `tests/Unit/SpryngWebhookTest.php` pins both the
+names and the rule that a subscription may only name an event this catalogue lists.
 
 The callback carries two things that are easy to miss and break the receiving end silently:
 

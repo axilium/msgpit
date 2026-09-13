@@ -43,6 +43,11 @@ The webhook endpoints exist so an application's own settings screen keeps workin
 keeps no subscription state: it accepts a registration and answers realistically, but the callback
 URL it actually uses is the one in `MSGPIT_SPRYNG_DLR_URL`.
 
+The event names come from the live endpoint, not from Spryng's documentation. The docs list four
+names prefixed with `sms-`; the API returns six without that prefix (`message-delivered`,
+`message-failed`, `message-received`, `inbound-opted-out`, `message-updated`,
+`schedule-updated`).
+
 Balance is the one place where msgpit knowingly contradicts Spryng's documentation. The portal
 says 201 with an unwrapped body; both the official SDK and a real consuming application expect 200
 with a `data` wrapper, so that is what msgpit returns.
