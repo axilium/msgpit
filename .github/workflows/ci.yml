@@ -54,7 +54,7 @@ jobs:
       # local development never exercises.
       - name: Run and check it serves
         run: |
-          docker run -d --name msgpit-ci -p 8080:8080 msgpit:ci
+          docker run -d --name msgpit-ci -p 8080:8080 -p 1025:1025 msgpit:ci
           for i in $(seq 1 30); do
             if [ "$(docker inspect --format '{{.State.Health.Status}}' msgpit-ci)" = healthy ]; then
               break
@@ -78,6 +78,46 @@ jobs:
           curl -s http://localhost:8080/api/messages | grep -q '"body":"hello"'
           # docker exec runs as the image user; check the server process itself.
           docker exec msgpit-ci ps -o user,comm | grep php | grep -q www-data
+
+      # The SMTP listener is a second process in the same container, and a silent one looks
+      # exactly like a working one, so it gets its own end-to-end check.
+      - name: Accept a mail over SMTP
+        run: |
+          python3 - <<'PY'
+          import smtplib
+          from email.message import EmailMessage
+
+          message = EmailMessage()
+          message['From'] = 'CI <ci@example.test>'
+          message['To'] = 'raymond@example.test'
+          message['Subject'] = 'Een onderwerp met een accent: café'
+          message.set_content('De tekstversie.')
+          message.add_alternative('<p>De <b>html</b>versie.</p>', subtype='html')
+          message.add_attachment(b'%PDF-1.4 ci', maintype='application', subtype='pdf', filename='rapport.pdf')
+
+          with smtplib.SMTP('127.0.0.1', 1025, timeout=10) as smtp:
+              smtp.ehlo('ci.test')
+              smtp.send_message(message)
+          PY
+
+          sleep 1
+          curl -s 'http://localhost:8080/api/messages?channel=email' > mail.json
+
+          python3 - <<'PY'
+          import json, sys
+
+          messages = json.load(open('mail.json'))['messages']
+          assert len(messages) == 1, f'expected one mail, got {len(messages)}'
+
+          message = messages[0]
+          assert message['provider'] == 'smtp', message['provider']
+          assert message['channel'] == 'email', message['channel']
+          assert message['to'] == 'raymond@example.test', message['to']
+          assert message['meta']['subject'] == 'Een onderwerp met een accent: café', message['meta']['subject']
+          assert message['meta']['attachments'] == 1, message['meta']
+          assert message['meta']['hasHtml'] is True, message['meta']
+          print('mail captured and parsed')
+          PY
 
       - name: Container logs on failure
         if: failure()

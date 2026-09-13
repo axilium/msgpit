@@ -36,6 +36,37 @@ everything in a web UI.
   when the stream drops.
 - Base image: `php:8.3-cli-alpine` with `pdo_sqlite`. Multi-arch (amd64 + arm64).
 
+## Mail
+
+msgpit also catches SMTP, so a project has one place for everything it sends rather than a mail
+catcher beside a message catcher. It is meant to replace Mailpit in our projects, not to compete
+with it: no POP3, no link checking, no Outlook compatibility report.
+
+- `Smtp\Session` is the protocol as a state machine, with no sockets in it, so the whole dialogue
+  is testable without opening a port. `Smtp\Server` adds the sockets and selects over them; PHP
+  here has no pcntl, so connections are multiplexed rather than forked.
+- **We advertise neither STARTTLS nor AUTH.** Clients only use what the server offers, and every
+  client we care about talks plain when nothing else is on the table. This only ever listens inside
+  a development network.
+- `Mime\Parser` handles what mail clients send, not two decades of broken mail from the internet.
+  It stays small because PHP already does the hard parts: `iconv_mime_decode_headers()` for folding
+  and RFC 2047, `quoted_printable_decode()` and `base64_decode()` for transfer encodings, `iconv()`
+  for charsets. Never unfold headers yourself before decoding: the whitespace between two
+  encoded-words has to disappear rather than become a space, and that is how a subject gets mangled.
+- SMTP is **not** a provider. The `Provider` contract is HTTP routes and a listener does not fit in
+  it, so mail is core: `provider` is `smtp` and the channel is `email`. Do not invent a fake
+  provider for it.
+- One message per recipient, as everywhere else, and the **envelope** decides who those are, not
+  the To header. That is how delivery works and the only way a Bcc shows up at all.
+- MIME parts live in their own table with the content as a BLOB, and pruning takes them along:
+  attachments are the bulk of the database.
+- The listener is a second process started by `docker-entrypoint.sh`, which restarts it if it dies.
+  Both processes write the same SQLite file, hence WAL mode and a busy timeout. The healthcheck
+  checks both ports, because a container that answers HTTP while silently accepting no mail is the
+  worst of both worlds.
+- Docksal projects reach it through the network aliases `mail` and `mailpit`, so the sendmail
+  configuration that Docksal's cli image ships (`msmtp ... --host=mail --port=1025`) needs no change.
+
 ## Architecture
 
 ```

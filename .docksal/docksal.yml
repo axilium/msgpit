@@ -18,6 +18,12 @@ services:
       - io.docksal.virtual-host=${VIRTUAL_HOST},*.${VIRTUAL_HOST}
       - io.docksal.virtual-port=8080
       - io.docksal.project-root=${PROJECT_ROOT}
+    networks:
+      default:
+        # So a project that still points its sendmail at "mail" reaches us without any change.
+        aliases:
+          - mail
+          - mailpit
     environment:
       - MSGPIT_DB=/data/msgpit.sqlite
       - MSGPIT_VERSION=dev
