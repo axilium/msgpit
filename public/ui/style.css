@@ -112,10 +112,6 @@ body {
     outline-color: var(--accent);
 }
 
-.topbar button.danger {
-    color: #ff9a92;
-}
-
 button.icon {
     display: inline-flex;
     align-items: center;
@@ -256,6 +252,50 @@ button.danger {
     border-color: var(--border-strong);
 }
 
+/* Reference menu */
+
+.menu {
+    position: relative;
+}
+
+.menu-list {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 20;
+    min-width: 220px;
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-panel);
+    box-shadow: 0 12px 28px rgb(0 0 0 / 0.22);
+}
+
+/* The menu belongs to the light workspace, not to the dark bar it hangs from. */
+.topbar .menu-list button {
+    display: block;
+    width: 100%;
+    padding: 5px 8px;
+    border: 0;
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text);
+    text-align: left;
+}
+
+.topbar .menu-list button:hover {
+    background: var(--bg-hover);
+    border-color: transparent;
+}
+
+.topbar .menu-list button[aria-current="true"] {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+}
+
 /* Workspace */
 
 .workspace {
@@ -328,9 +368,42 @@ button.danger {
 /* Message list */
 
 .list {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
     border-right: 1px solid var(--border);
-    overflow-y: auto;
+    overflow: hidden;
     background: var(--bg-panel);
+}
+
+/* The bar stays put while the list below it scrolls. */
+.list-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px 5px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-sunken);
+}
+
+.list-title {
+    margin-right: auto;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-faint);
+}
+
+.list-bar button {
+    padding: 2px 7px;
+    font-size: 11px;
+}
+
+.list-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
 }
 
 .list ol {

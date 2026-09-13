@@ -16,6 +16,7 @@ const el = {
     navProviders: document.getElementById('nav-providers'),
     navChannels: document.getElementById('nav-channels'),
     navDocs: document.getElementById('nav-docs'),
+    docsToggle: document.getElementById('docs-toggle'),
     docs: document.getElementById('docs'),
     workspace: document.querySelector('.workspace'),
     statMessages: document.getElementById('stat-messages'),
@@ -36,6 +37,7 @@ const state = {
     doc: null,
     scenarios: [],
     unread: 0,
+    dlrProviders: [],
 };
 
 const api = async (path, options = {}) => {
@@ -290,13 +292,29 @@ const panels = {
     `,
 };
 
-const renderDetail = (message) => {
+/** Delivery only makes sense for providers that can call the app back, so e-mail never gets the tab. */
+const tabsFor = (message) => {
     const tabs = [
         ['message', 'Message', null],
         ['raw', 'Raw', null],
-        ['delivery', 'Delivery', message.deliveryReports.length || null],
-        ['meta', 'Meta', Object.keys(message.meta).length || null],
     ];
+
+    if (state.dlrProviders.includes(message.provider)) {
+        tabs.push(['delivery', 'Delivery', message.deliveryReports.length || null]);
+    }
+
+    tabs.push(['meta', 'Meta', Object.keys(message.meta).length || null]);
+
+    return tabs;
+};
+
+const renderDetail = (message) => {
+    const tabs = tabsFor(message);
+
+    // A deep link or a previous message can point at a tab this message does not have.
+    if (!tabs.some(([id]) => id === state.tab)) {
+        state.tab = 'message';
+    }
 
     el.detail.innerHTML = `
         <div class="detail-head">
@@ -394,6 +412,8 @@ const refresh = async () => {
 const loadProviders = async () => {
     const {providers, version} = await api('/providers');
 
+    state.dlrProviders = providers.filter((provider) => provider.deliveryReports).map((provider) => provider.id);
+
     // Only a real release gets the v prefix; "dev" and "dev-<sha>" stand on their own.
     el.version.textContent = /^\d/.test(version) ? `v${version}` : version;
 
@@ -430,10 +450,23 @@ const scenarioTable = () => {
     </table></div>`;
 };
 
+const closeDocsMenu = () => {
+    el.navDocs.hidden = true;
+    el.docsToggle.setAttribute('aria-expanded', 'false');
+};
+
+const toggleDocsMenu = () => {
+    const opening = el.navDocs.hidden;
+
+    el.navDocs.hidden = !opening;
+    el.docsToggle.setAttribute('aria-expanded', String(opening));
+};
+
 const openDoc = async (slug) => {
     const {markdown} = await api(`/docs/${slug}`);
 
     state.doc = slug;
+    closeDocsMenu();
     el.workspace.classList.add('reading');
     el.docs.hidden = false;
     el.docs.innerHTML = renderMarkdown(markdown, {scenarios: scenarioTable()});
@@ -458,9 +491,9 @@ const loadDocs = async () => {
 
     state.scenarios = scenarios;
     el.navDocs.innerHTML = pages.map((page) => `
-        <li>
-            <button type="button" data-doc="${escapeHtml(page.slug)}" aria-current="false">
-                <span>${escapeHtml(page.title)}</span>
+        <li role="none">
+            <button type="button" role="menuitem" data-doc="${escapeHtml(page.slug)}" aria-current="false">
+                ${escapeHtml(page.title)}
             </button>
         </li>
     `).join('');
@@ -602,14 +635,6 @@ const setConnection = (label, className) => {
 };
 
 document.querySelector('.sidebar').addEventListener('click', (event) => {
-    const doc = event.target.closest('[data-doc]');
-
-    if (doc) {
-        openDoc(doc.dataset.doc);
-
-        return;
-    }
-
     const button = event.target.closest('[data-filter]');
 
     if (!button) {
@@ -627,6 +652,30 @@ document.querySelector('.sidebar').addEventListener('click', (event) => {
 
     state.signature = '';
     refresh();
+});
+
+el.docsToggle.addEventListener('click', () => toggleDocsMenu());
+
+el.navDocs.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-doc]');
+
+    if (button) {
+        openDoc(button.dataset.doc);
+    }
+});
+
+// Anywhere outside the menu closes it, Escape included.
+document.addEventListener('click', (event) => {
+    if (!event.target.closest('.menu')) {
+        closeDocsMenu();
+    }
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !el.navDocs.hidden) {
+        closeDocsMenu();
+        el.docsToggle.focus();
+    }
 });
 
 el.messages.addEventListener('click', (event) => {
@@ -710,8 +759,8 @@ const connect = () => {
     };
 };
 
-await refresh();
 await loadProviders();
+await refresh();
 await loadDocs();
 notifications.render();
 

@@ -37,8 +37,12 @@
             </svg>
             <span class="sr-only">Desktop notifications</span>
         </button>
-        <button id="mark-read" type="button" class="ghost" hidden>Mark all read</button>
-        <button id="clear" type="button" class="ghost danger">Clear</button>
+
+        <div class="menu">
+            <button id="docs-toggle" type="button" class="ghost" aria-haspopup="true" aria-expanded="false"
+                    aria-controls="nav-docs">Reference</button>
+            <ul id="nav-docs" class="menu-list" role="menu" hidden></ul>
+        </div>
     </div>
 </header>
 
@@ -52,17 +56,22 @@
 
         <p class="sidebar-heading">Channels</p>
         <ul id="nav-channels" class="nav"></ul>
-
-        <p class="sidebar-heading">Reference</p>
-        <ul id="nav-docs" class="nav"></ul>
     </nav>
 
     <section class="list" aria-label="Messages">
-        <ol id="messages"></ol>
-        <p id="empty" class="empty" hidden>
-            Nothing captured yet.<br>
-            Point your app at <code>http://msgpit:8080/spryng/v2</code> and send a message.
-        </p>
+        <div class="list-bar">
+            <span class="list-title">Messages</span>
+            <button id="mark-read" type="button" class="ghost" hidden>Mark all read</button>
+            <button id="clear" type="button" class="ghost danger">Clear</button>
+        </div>
+
+        <div class="list-scroll">
+            <ol id="messages"></ol>
+            <p id="empty" class="empty" hidden>
+                Nothing captured yet.<br>
+                Point your app at <code>http://msgpit:8080/spryng/v2</code> and send a message.
+            </p>
+        </div>
     </section>
 
     <section class="detail" id="detail" aria-label="Message detail">
