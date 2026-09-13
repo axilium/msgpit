@@ -56,8 +56,10 @@ $enabled = array_values(array_filter(array_map('trim', explode(',', $env('MSGPIT
 $classes = require $root . '/providers.php';
 $registry = ProviderRegistry::fromClasses($classes, $enabled);
 
+$version = $env('MSGPIT_VERSION', 'dev');
+
 if ($request->path === '/healthz') {
-    Response::json(['status' => 'ok'])->send();
+    Response::json(['status' => 'ok', 'version' => $version])->send();
 
     return;
 }
@@ -69,7 +71,7 @@ if ($request->path === '/api/stream') {
 }
 
 if (str_starts_with($request->path, '/api')) {
-    ((new Api($storage, $registry, new DlrDispatcher($storage), new Docs($root . '/docs')))->handle($request)
+    ((new Api($storage, $registry, new DlrDispatcher($storage), new Docs($root . '/docs'), $version))->handle($request)
         ?? Response::json(['error' => 'Not found.'], 404))->send();
 
     return;

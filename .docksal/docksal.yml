@@ -20,6 +20,7 @@ services:
       - io.docksal.project-root=${PROJECT_ROOT}
     environment:
       - MSGPIT_DB=/data/msgpit.sqlite
+      - MSGPIT_VERSION=dev
       - MSGPIT_PROVIDERS
       - MSGPIT_MAX_MESSAGES
       # Delivery-report callback per provider. Set in .docksal/docksal-local.env.

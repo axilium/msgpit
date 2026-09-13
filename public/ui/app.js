@@ -21,6 +21,7 @@ const el = {
     statSegments: document.getElementById('stat-segments'),
     statRecipients: document.getElementById('stat-recipients'),
     connection: document.getElementById('connection'),
+    version: document.getElementById('version'),
 };
 
 const state = {
@@ -384,7 +385,9 @@ const refresh = async () => {
 };
 
 const loadProviders = async () => {
-    const {providers} = await api('/providers');
+    const {providers, version} = await api('/providers');
+
+    el.version.textContent = version === 'dev' ? 'dev' : `v${version}`;
 
     // Providers with no messages yet should still be visible in the sidebar.
     if (providers.length > 0 && state.messages.length === 0) {

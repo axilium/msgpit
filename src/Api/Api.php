@@ -24,6 +24,7 @@ final readonly class Api
         private ProviderRegistry $registry,
         private DlrDispatcher $dispatcher,
         private Docs $docs,
+        private string $version = 'dev',
     ) {}
 
     public function handle(Request $request): ?Response
@@ -116,7 +117,7 @@ final readonly class Api
             'errorScenarios' => $provider instanceof SupportsErrorScenarios,
         ], $this->registry->all());
 
-        return Response::json(['providers' => $providers]);
+        return Response::json(['providers' => $providers, 'version' => $this->version]);
     }
 
     /** The catalogue the reference docs render, so the magic numbers are never copied by hand. */

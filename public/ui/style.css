@@ -739,8 +739,12 @@ pre {
     font-variant-numeric: tabular-nums;
 }
 
-.connection {
+.version {
     margin-left: auto;
+    font-variant-numeric: tabular-nums;
+}
+
+.connection {
     display: flex;
     align-items: center;
     gap: 6px;
