@@ -16,6 +16,9 @@ a realistic provider response comes back, and everything shows up in a web UI.
 - Delivery reports on demand. Mark a message delivered or failed and msgpit calls your webhook
   the way the provider would, then shows the response.
 - Forced failures, either through a magic recipient number or a one-shot toggle in the UI.
+- **Email too.** msgpit speaks SMTP on 1025, so a project has one inbox for everything it sends
+  rather than a mail catcher beside a message catcher. Html is previewed as the recipient sees it,
+  inline images and all, with attachments to download.
 - New messages appear instantly over SSE, no refresh. The unread count is in the tab title, and
   over https a desktop notification can announce one while you are working elsewhere.
 
@@ -66,6 +69,7 @@ The reference documentation lives in [`docs/`](docs/) and is served inside the a
 - [Encoding and segments](docs/04-segments.md)
 - [Providers](docs/05-providers.md)
 - [HTTP API](docs/06-api.md)
+- [Email](docs/07-email.md)
 
 ## HTTP API
 

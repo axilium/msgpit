@@ -637,6 +637,55 @@ dl.fields dd {
     word-break: break-all;
 }
 
+/* Mail */
+
+.mail-preview {
+    width: 100%;
+    min-height: 320px;
+    height: 60vh;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    /* The mail decides its own colours; a white sheet is what a mail client shows. */
+    background: #fff;
+    color-scheme: light;
+}
+
+.attachments {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.attachments a {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 6px;
+    color: inherit;
+    text-decoration: none;
+    background: var(--bg-panel);
+}
+
+.attachments a:hover {
+    border-color: var(--accent);
+    background: var(--bg-hover);
+}
+
+.attachment-name {
+    font-weight: 600;
+    word-break: break-all;
+}
+
+.attachment-meta {
+    color: var(--text-faint);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
 /* Segment meter */
 
 .meter {

@@ -29,7 +29,9 @@ const el = {
 const state = {
     messages: [],
     selectedId: null,
-    tab: ['message', 'raw', 'delivery', 'meta'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'message',
+    // Any tab name is accepted here; renderDetail falls back when the message has no such tab,
+    // so this list cannot fall behind the tabs themselves.
+    tab: /^[a-z]+$/.test(location.hash.slice(1)) ? location.hash.slice(1) : 'message',
     filter: {provider: '', channel: ''},
     search: '',
     signature: '',
@@ -230,10 +232,10 @@ const renderList = () => {
         <li data-id="${escapeHtml(message.id)}" aria-selected="${message.id === state.selectedId}"
             class="${message.read ? '' : 'unread'}">
             <div class="list-head">
-                <span class="to">${escapeHtml(message.to)}</span>
+                <span class="to">${escapeHtml(message.channel === 'email' ? (message.meta.subject || '(no subject)') : message.to)}</span>
                 <time datetime="${escapeHtml(message.createdAt)}">${formatTime(message.createdAt)}</time>
             </div>
-            <p class="preview">${escapeHtml(message.body) || '<em>empty</em>'}</p>
+            <p class="preview">${message.channel === 'email' ? `${escapeHtml(message.to)} &middot; ` : ''}${escapeHtml(message.body) || '<em>empty</em>'}</p>
             <div class="tags">
                 <span class="tag">${escapeHtml(message.provider)}</span>
                 <span class="tag">${escapeHtml(message.channel)}</span>
@@ -242,6 +244,80 @@ const renderList = () => {
             </div>
         </li>
     `).join('');
+};
+
+const formatBytes = (bytes) => (bytes < 1024
+    ? `${bytes} B`
+    : (bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} kB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`));
+
+const partUrl = (message, part) => `/api/messages/${message.id}/parts/${part.id}`;
+
+/**
+ * The html as the recipient would see it, rendered in a sandboxed iframe: no scripts, no forms,
+ * and its own origin, so a captured mail cannot touch msgpit. Images the mail carries are
+ * referenced by cid, which means nothing to a browser, so those become part URLs first.
+ */
+const renderMailPreview = (message) => {
+    const inline = (message.parts ?? []).filter((part) => part.contentId);
+
+    const html = inline.reduce(
+        (carry, part) => carry.replaceAll(`cid:${part.contentId}`, `${location.origin}${partUrl(message, part)}`),
+        message.html,
+    );
+
+    return `<iframe class="mail-preview" sandbox="allow-popups" referrerpolicy="no-referrer"
+                    title="Message preview" srcdoc="${escapeHtml(html)}"></iframe>`;
+};
+
+const mailHeaders = (message) => {
+    const meta = message.meta;
+
+    const rows = [
+        ['From', message.from],
+        ['To', meta.to ?? message.to],
+        ['Cc', meta.cc],
+        ['Reply-To', meta.replyTo],
+        ['Delivered to', meta.to === message.to ? null : message.to],
+        ['Captured', formatDateTime(message.createdAt)],
+    ].filter(([, value]) => value);
+
+    return `<dl class="fields">${rows.map(([label, value]) => `
+        <dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>
+    `).join('')}</dl>`;
+};
+
+const mailPanels = {
+    message: (message) => `
+        <h3>${message.html === null ? 'Message' : 'As the recipient sees it'}</h3>
+        ${message.html === null
+            ? `<p class="body-text">${escapeHtml(message.text ?? message.body) || '<em>empty</em>'}</p>`
+            : renderMailPreview(message)}
+        <h3>Headers</h3>
+        ${mailHeaders(message)}
+    `,
+
+    text: (message) => `
+        <h3>Plain text alternative</h3>
+        <p class="body-text">${escapeHtml(message.text ?? '') || '<em>empty</em>'}</p>
+    `,
+
+    attachments: (message) => {
+        const attachments = (message.parts ?? []).filter((part) => part.disposition === 'attachment');
+
+        return `
+            <h3>${plural(attachments.length, 'attachment')}</h3>
+            <ul class="attachments">
+                ${attachments.map((part) => `
+                    <li>
+                        <a href="${partUrl(message, part)}?download=1" download>
+                            <span class="attachment-name">${escapeHtml(part.filename ?? 'unnamed')}</span>
+                            <span class="attachment-meta">${escapeHtml(part.contentType)} &middot; ${formatBytes(part.size)}</span>
+                        </a>
+                    </li>
+                `).join('')}
+            </ul>
+        `;
+    },
 };
 
 const panels = {
@@ -293,11 +369,26 @@ const panels = {
 };
 
 /** Delivery only makes sense for providers that can call the app back, so e-mail never gets the tab. */
+const isMail = (message) => message.channel === 'email';
+
 const tabsFor = (message) => {
     const tabs = [
-        ['message', 'Message', null],
+        ['message', isMail(message) ? 'Preview' : 'Message', null],
         ['raw', 'Raw', null],
     ];
+
+    if (isMail(message)) {
+        const attachments = (message.parts ?? []).filter((part) => part.disposition === 'attachment');
+
+        // Only worth a tab when there is a plain text alternative to compare against.
+        if (message.text !== null && message.html !== null) {
+            tabs.push(['text', 'Text', null]);
+        }
+
+        if (attachments.length > 0) {
+            tabs.push(['attachments', 'Attachments', attachments.length]);
+        }
+    }
 
     if (state.dlrProviders.includes(message.provider)) {
         tabs.push(['delivery', 'Delivery', message.deliveryReports.length || null]);
@@ -316,11 +407,15 @@ const renderDetail = (message) => {
         state.tab = 'message';
     }
 
+    const panelsFor = isMail(message) ? {...panels, ...mailPanels} : panels;
+    const title = isMail(message) ? (message.meta.subject || '(no subject)') : message.to;
+
     el.detail.innerHTML = `
         <div class="detail-head">
-            <h2>${escapeHtml(message.to)}</h2>
+            <h2>${escapeHtml(title)}</h2>
             <p class="subtitle">
-                ${escapeHtml(message.provider)} &middot; ${escapeHtml(message.channel)} &middot;
+                ${isMail(message) ? escapeHtml(message.to) : escapeHtml(message.provider)} &middot;
+                ${escapeHtml(message.channel)} &middot;
                 ${formatDateTime(message.createdAt)} &middot; ${escapeHtml(message.status)}
             </p>
         </div>
@@ -331,7 +426,7 @@ const renderDetail = (message) => {
                 </button>
             `).join('')}
         </div>
-        <div class="panel" role="tabpanel">${panels[state.tab](message)}</div>
+        <div class="panel" role="tabpanel">${(panelsFor[state.tab] ?? panelsFor.message)(message)}</div>
     `;
 
     el.detail.querySelectorAll('[data-tab]').forEach((button) => {

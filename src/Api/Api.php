@@ -61,6 +61,10 @@ final readonly class Api
             return $this->sendDeliveryReport($matches[1], $request);
         }
 
+        if (preg_match('#^/messages/([^/]+)/parts/([^/]+)$#', $path, $matches) === 1 && $request->method === 'GET') {
+            return $this->part($matches[1], $matches[2], $request);
+        }
+
         if (preg_match('#^/messages/([^/]+)/read$#', $path, $matches) === 1 && $request->method === 'POST') {
             $this->storage->markRead($matches[1]);
 
@@ -88,10 +92,92 @@ final readonly class Api
             return Response::json(['error' => 'Message not found.'], 404);
         }
 
-        return Response::json($message->toArray() + [
+        $detail = $message->toArray() + [
             'rawRequest' => $this->storage->rawRequest($id),
             'deliveryReports' => $this->storage->deliveryReports($id),
-        ]);
+        ];
+
+        // Mail carries its MIME parts along: the bodies to render, the images the html points at,
+        // and the attachments to offer. Everything else has none.
+        $parts = $this->storage->parts($id);
+
+        if ($parts !== []) {
+            $detail['parts'] = $parts;
+            $detail['html'] = $this->body($id, $parts, 'text/html');
+            $detail['text'] = $this->body($id, $parts, 'text/plain');
+        }
+
+        return Response::json($detail);
+    }
+
+    /**
+     * @param list<array{id: string, contentType: string, contentId: ?string, filename: ?string, disposition: string, size: int}> $parts
+     */
+    private function body(string $messageId, array $parts, string $contentType): ?string
+    {
+        foreach ($parts as $part) {
+            if ($part['contentType'] === $contentType && $part['disposition'] === 'body') {
+                $content = $this->storage->part($messageId, $part['id']);
+
+                return $content === null ? null : $content['content'];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Serves one MIME part: an image the html refers to, or an attachment to save. The content
+     * type comes from the message, so it is never trusted blindly for rendering; the UI shows
+     * images and offers everything else as a download.
+     */
+    private function part(string $messageId, string $partId, Request $request): Response
+    {
+        $part = $this->storage->part($messageId, $partId);
+
+        if ($part === null) {
+            return Response::json(['error' => 'Part not found.'], 404);
+        }
+
+        $headers = [
+            'Content-Type' => self::safeContentType($part['contentType']),
+            'Content-Length' => (string) strlen($part['content']),
+            // Captured mail is throwaway, and a stale image after a re-send is confusing.
+            'Cache-Control' => 'no-store',
+            'X-Content-Type-Options' => 'nosniff',
+        ];
+
+        if (($request->query['download'] ?? '') !== '' || $part['filename'] !== null) {
+            $disposition = ($request->query['download'] ?? '') !== '' ? 'attachment' : 'inline';
+            $filename = $part['filename'] ?? 'part';
+            $headers['Content-Disposition'] = $disposition . '; filename="' . self::quoteFilename($filename) . '"'
+                . "; filename*=UTF-8''" . rawurlencode($filename);
+        }
+
+        return new Response(200, $part['content'], $headers);
+    }
+
+    /**
+     * A part claims its own content type, and the sender chose it. Anything we would rather the
+     * browser did not execute in our own origin is served as a download instead.
+     */
+    private static function safeContentType(string $contentType): string
+    {
+        $type = strtolower(trim(explode(';', $contentType)[0]));
+
+        $safe = str_starts_with($type, 'image/')
+            || str_starts_with($type, 'audio/')
+            || str_starts_with($type, 'video/')
+            || in_array($type, ['application/pdf', 'text/plain'], true);
+
+        return $safe ? $type : 'application/octet-stream';
+    }
+
+    private static function quoteFilename(string $filename): string
+    {
+        $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT', $filename);
+
+        return str_replace('"', '', $ascii === false ? 'part' : $ascii);
     }
 
     private function markAllRead(): Response
