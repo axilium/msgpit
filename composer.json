@@ -1,0 +1,35 @@
+{
+    "name": "msgpit/msgpit",
+    "description": "Local catcher for outgoing SMS, push and other messages.",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.3"
+    },
+    "require-dev": {
+        "phpstan/phpstan": "^2.1",
+        "phpunit/phpunit": "^11.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "Msgpit\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Msgpit\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": [
+            "@test:php",
+            "@test:js"
+        ],
+        "test:php": "phpunit",
+        "test:js": "node --test tests/Js/markdown.test.mjs",
+        "stan": "phpstan analyse"
+    },
+    "config": {
+        "sort-packages": true
+    }
+}

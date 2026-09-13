@@ -1,0 +1,6 @@
+{
+    "status": 400,
+    "body": {
+        "errors": [{"errorCode": "msisdn_invalid", "errorMessage": "Recipient msisdn must be in E.164 format."}]
+    }
+}

@@ -1,0 +1,17 @@
+{
+    "method": "POST",
+    "path": "/spryng/v2/messages",
+    "headers": {"x-api-key": "test-key-abcdef123456", "content-type": "application/json"},
+    "body": {
+        "accountReference": "SPNL0000000",
+        "channel": "SMS",
+        "from": "Acme",
+        "name": "order-update",
+        "messageType": "NotificationsAndReminders",
+        "body": {"text": "Hi [name], order [order] is on its way."},
+        "recipients": [
+            {"msisdn": "+31611111111", "variables": {"name": "Ada", "order": "8821"}},
+            {"msisdn": "+31622222222", "variables": {"name": "Alan", "order": "8822"}}
+        ]
+    }
+}

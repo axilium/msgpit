@@ -1,0 +1,29 @@
+services:
+  # Tooling only: composer, phpunit, phpstan. Does not serve anything.
+  cli:
+    extends:
+      file: ${HOME}/.docksal/stacks/services.yml
+      service: cli
+
+  # The app itself, built from the repo Dockerfile with the source mounted
+  # over /app so changes are live without rebuilding.
+  msgpit:
+    hostname: msgpit
+    build:
+      context: ${PROJECT_ROOT}
+    volumes:
+      - project_root:/app:rw,nocopy,cached
+      - msgpit_data:/data
+    labels:
+      - io.docksal.virtual-host=${VIRTUAL_HOST},*.${VIRTUAL_HOST}
+      - io.docksal.virtual-port=8080
+      - io.docksal.project-root=${PROJECT_ROOT}
+    environment:
+      - MSGPIT_DB=/data/msgpit.sqlite
+      - MSGPIT_PROVIDERS
+      - MSGPIT_MAX_MESSAGES
+      # Delivery-report callback per provider. Set in .docksal/docksal-local.env.
+      - MSGPIT_SPRYNG_DLR_URL
+
+volumes:
+  msgpit_data:

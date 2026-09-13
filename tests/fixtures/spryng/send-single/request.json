@@ -1,0 +1,12 @@
+{
+    "method": "POST",
+    "path": "/spryng/v2/messages",
+    "headers": {"x-api-key": "test-key-abcdef123456", "content-type": "application/json"},
+    "body": {
+        "accountReference": "SPNL0000000",
+        "channel": "SMS",
+        "from": "Acme",
+        "body": {"text": "Your code is 123456"},
+        "recipients": [{"msisdn": "+31612345678"}]
+    }
+}

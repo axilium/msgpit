@@ -1,0 +1,5 @@
+[
+    {"provider": "spryng", "channel": "sms", "to": "+31611111111", "body": "Hello", "segments": 1},
+    {"provider": "spryng", "channel": "sms", "to": "+31622222222", "body": "Hello", "segments": 1},
+    {"provider": "spryng", "channel": "sms", "to": "+447711000032", "body": "Hello", "segments": 1}
+]

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>msgpit</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7.5'%20fill='%232f6feb'/%3E%3Cpath%20d='M9%206h14a4%204%200%200%201%204%204v8a4%204%200%200%201-4%204h-7.2l-4.6%203.8A1%201%200%200%201%209.6%2025v-3H9a4%204%200%200%201-4-4v-8a4%204%200%200%201%204-4z'%20fill='%23fff'/%3E%3Cpath%20d='M16%209.5v6.2m0%200%203-3m-3%203-3-3'%20fill='none'%20stroke='%232f6feb'%20stroke-width='2.2'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3Cpath%20d='M11%2018.5h10'%20stroke='%239dbcf7'%20stroke-width='2'%20stroke-linecap='round'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="/ui/style.css">
+</head>
+<body>
+<header class="topbar">
+    <span class="brand">
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+            <rect class="plate" width="32" height="32" rx="7.5"/>
+            <path class="bubble" d="M9 6h14a4 4 0 0 1 4 4v8a4 4 0 0 1-4 4h-7.2l-4.6 3.8A1 1 0 0 1 9.6 25v-3H9a4 4 0 0 1-4-4v-8a4 4 0 0 1 4-4z"/>
+            <path class="arrow" d="M16 9.5v6.2m0 0 3-3m-3 3-3-3"/>
+            <path class="rule" d="M11 18.5h10"/>
+        </svg>
+        msgpit
+    </span>
+
+    <input id="search" type="search" placeholder="Filter by recipient or text" aria-label="Filter messages">
+
+    <div class="topbar-actions">
+        <select id="scenario" aria-label="Force a failure on the next request">
+            <option value="">No forced failure</option>
+            <option value="InvalidNumber">Next request: invalid number</option>
+            <option value="Unauthorized">Next request: unauthorized</option>
+            <option value="RateLimited">Next request: rate limited</option>
+            <option value="ServerError">Next request: server error</option>
+        </select>
+        <button id="mark-read" type="button" class="ghost" hidden>Mark all read</button>
+        <button id="clear" type="button" class="ghost danger">Clear</button>
+    </div>
+</header>
+
+<div class="workspace">
+    <nav class="sidebar" aria-label="Filters">
+        <p class="sidebar-heading">Inbox</p>
+        <ul id="nav-all" class="nav"></ul>
+
+        <p class="sidebar-heading">Providers</p>
+        <ul id="nav-providers" class="nav"></ul>
+
+        <p class="sidebar-heading">Channels</p>
+        <ul id="nav-channels" class="nav"></ul>
+
+        <p class="sidebar-heading">Reference</p>
+        <ul id="nav-docs" class="nav"></ul>
+    </nav>
+
+    <section class="list" aria-label="Messages">
+        <ol id="messages"></ol>
+        <p id="empty" class="empty" hidden>
+            Nothing captured yet.<br>
+            Point your app at <code>http://msgpit:8080/spryng/v2</code> and send a message.
+        </p>
+    </section>
+
+    <section class="detail" id="detail" aria-label="Message detail">
+        <p class="empty">Select a message to inspect it.</p>
+    </section>
+
+    <article class="docs" id="docs" aria-label="Reference" hidden></article>
+</div>
+
+<footer class="statusbar">
+    <span id="stat-messages">0 messages</span>
+    <span id="stat-segments">0 segments</span>
+    <span id="stat-recipients">0 recipients</span>
+    <span id="connection" class="connection connecting">Connecting</span>
+</footer>
+
+<script src="/ui/app.js" type="module"></script>
+</body>
+</html>

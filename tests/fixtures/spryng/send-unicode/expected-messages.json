@@ -1,0 +1,11 @@
+[
+    {
+        "to": "+31612345678",
+        "body": "Package on its way 📦",
+        "encoding": "UCS-2",
+        "segments": 1,
+        "characters": 20,
+        "units": 21,
+        "ucs2Offsets": [19]
+    }
+]

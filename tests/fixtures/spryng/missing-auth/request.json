@@ -1,0 +1,11 @@
+{
+    "method": "POST",
+    "path": "/spryng/v2/messages",
+    "headers": {"content-type": "application/json"},
+    "body": {
+        "accountReference": "SPNL0000000",
+        "channel": "SMS",
+        "body": {"text": "Hello"},
+        "recipients": [{"msisdn": "+31612345678"}]
+    }
+}

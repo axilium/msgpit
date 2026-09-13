@@ -1,0 +1,418 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Msgpit\Core;
+
+use PDO;
+use PDOStatement;
+
+/**
+ * SQLite storage. The schema is created on boot; losing the file is acceptable.
+ *
+ * @phpstan-type EventRow array{seq: int, type: string, messageId: ?string}
+ */
+final class Storage
+{
+    public function __construct(
+        private readonly PDO $pdo,
+        private readonly int $maxMessages = 1000,
+    ) {
+        $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $this->migrate();
+    }
+
+    public static function open(string $path, int $maxMessages = 1000): self
+    {
+        if ($path !== ':memory:' && !is_dir(dirname($path))) {
+            mkdir(dirname($path), 0o775, true);
+        }
+
+        return new self(new PDO('sqlite:' . $path), $maxMessages);
+    }
+
+    private function migrate(): void
+    {
+        $this->pdo->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS messages (
+                id TEXT PRIMARY KEY,
+                batch_id TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                channel TEXT NOT NULL,
+                sender TEXT,
+                recipient TEXT NOT NULL,
+                body TEXT NOT NULL,
+                meta TEXT NOT NULL DEFAULT '{}',
+                provider_ref TEXT,
+                status TEXT NOT NULL,
+                encoding TEXT,
+                segments INTEGER,
+                characters INTEGER,
+                units INTEGER,
+                ucs2_offsets TEXT NOT NULL DEFAULT '[]',
+                raw_request TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                read_at TEXT
+            );
+
+            CREATE INDEX IF NOT EXISTS messages_created_at ON messages (created_at DESC);
+
+            CREATE TABLE IF NOT EXISTS delivery_reports (
+                id TEXT PRIMARY KEY,
+                message_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                url TEXT NOT NULL,
+                request_body TEXT NOT NULL,
+                response_status INTEGER,
+                response_body TEXT,
+                sent_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS delivery_reports_message ON delivery_reports (message_id);
+
+            CREATE TABLE IF NOT EXISTS events (
+                seq INTEGER PRIMARY KEY AUTOINCREMENT,
+                type TEXT NOT NULL,
+                message_id TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS state (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+            SQL);
+
+        $this->addColumn('messages', 'read_at', 'TEXT');
+    }
+
+    /** Databases created before a column existed are upgraded in place. */
+    private function addColumn(string $table, string $column, string $definition): void
+    {
+        $statement = $this->pdo->query("PRAGMA table_info({$table})");
+        $existing = $statement === false ? [] : array_column(self::rows($statement), 'name');
+
+        if (!in_array($column, $existing, true)) {
+            $this->pdo->exec("ALTER TABLE {$table} ADD COLUMN {$column} {$definition}");
+        }
+    }
+
+    public function markRead(string $id): void
+    {
+        $statement = $this->pdo->prepare(
+            'UPDATE messages SET read_at = :read_at WHERE id = :id AND read_at IS NULL',
+        );
+        $statement->execute(['read_at' => gmdate('Y-m-d\TH:i:s\Z'), 'id' => $id]);
+
+        // Only announce an actual change, so other tabs are not woken for nothing.
+        if ($statement->rowCount() > 0) {
+            $this->recordEvent('read', $id);
+        }
+    }
+
+    public function markAllRead(): void
+    {
+        $statement = $this->pdo->prepare('UPDATE messages SET read_at = :read_at WHERE read_at IS NULL');
+        $statement->execute(['read_at' => gmdate('Y-m-d\TH:i:s\Z')]);
+
+        if ($statement->rowCount() > 0) {
+            $this->recordEvent('read', null);
+        }
+    }
+
+    public function unreadCount(): int
+    {
+        $statement = $this->pdo->query('SELECT COUNT(*) FROM messages WHERE read_at IS NULL');
+
+        return $statement === false ? 0 : self::int($statement->fetchColumn());
+    }
+
+    /** @param list<Message> $messages */
+    public function store(array $messages, RawRequest $rawRequest): void
+    {
+        $statement = $this->pdo->prepare(<<<'SQL'
+            INSERT INTO messages (
+                id, batch_id, provider, channel, sender, recipient, body, meta, provider_ref,
+                status, encoding, segments, characters, units, ucs2_offsets, raw_request, created_at
+            ) VALUES (
+                :id, :batch_id, :provider, :channel, :sender, :recipient, :body, :meta, :provider_ref,
+                :status, :encoding, :segments, :characters, :units, :ucs2_offsets, :raw_request, :created_at
+            )
+            SQL);
+
+        foreach ($messages as $message) {
+            $statement->execute([
+                'id' => $message->id,
+                'batch_id' => $message->batchId,
+                'provider' => $message->provider,
+                'channel' => $message->channel->value,
+                'sender' => $message->from,
+                'recipient' => $message->to,
+                'body' => $message->body,
+                'meta' => json_encode($message->meta, JSON_THROW_ON_ERROR),
+                'provider_ref' => $message->providerRef,
+                'status' => $message->status->value,
+                'encoding' => $message->segmentInfo?->encoding->value,
+                'segments' => $message->segmentInfo?->segments,
+                'characters' => $message->segmentInfo?->characters,
+                'units' => $message->segmentInfo?->units,
+                'ucs2_offsets' => json_encode($message->segmentInfo->ucs2Offsets ?? [], JSON_THROW_ON_ERROR),
+                'raw_request' => $rawRequest->toText(),
+                'created_at' => $message->createdAt,
+            ]);
+
+            $this->recordEvent('message', $message->id);
+        }
+
+        $this->prune();
+    }
+
+    /**
+     * @param array{provider?: string, channel?: string, to?: string, since?: string} $filters
+     * @return list<Message>
+     */
+    public function all(array $filters = []): array
+    {
+        $where = [];
+        $bindings = [];
+
+        foreach (['provider' => 'provider', 'channel' => 'channel'] as $filter => $column) {
+            if (($filters[$filter] ?? '') !== '') {
+                $where[] = "{$column} = :{$filter}";
+                $bindings[$filter] = $filters[$filter];
+            }
+        }
+
+        if (($filters['to'] ?? '') !== '') {
+            $where[] = 'recipient LIKE :to';
+            $bindings['to'] = '%' . $filters['to'] . '%';
+        }
+
+        if (($filters['since'] ?? '') !== '') {
+            $where[] = 'created_at > :since';
+            $bindings['since'] = $filters['since'];
+        }
+
+        $sql = 'SELECT * FROM messages'
+            . ($where === [] ? '' : ' WHERE ' . implode(' AND ', $where))
+            . ' ORDER BY created_at DESC, rowid DESC';
+
+        $statement = $this->pdo->prepare($sql);
+        $statement->execute($bindings);
+
+        return array_map(self::hydrate(...), self::rows($statement));
+    }
+
+    public function find(string $id): ?Message
+    {
+        $statement = $this->pdo->prepare('SELECT * FROM messages WHERE id = :id');
+        $statement->execute(['id' => $id]);
+        $rows = self::rows($statement);
+
+        return $rows === [] ? null : self::hydrate($rows[0]);
+    }
+
+    public function rawRequest(string $id): ?string
+    {
+        $statement = $this->pdo->prepare('SELECT raw_request FROM messages WHERE id = :id');
+        $statement->execute(['id' => $id]);
+        $value = $statement->fetchColumn();
+
+        return is_string($value) ? $value : null;
+    }
+
+    public function updateStatus(string $id, MessageStatus $status): void
+    {
+        $statement = $this->pdo->prepare('UPDATE messages SET status = :status WHERE id = :id');
+        $statement->execute(['status' => $status->value, 'id' => $id]);
+
+        $this->recordEvent('status', $id);
+    }
+
+    public function clear(): void
+    {
+        $this->pdo->exec('DELETE FROM messages');
+        $this->pdo->exec('DELETE FROM delivery_reports');
+        $this->recordEvent('cleared', null);
+    }
+
+    public function recordDeliveryReport(
+        string $messageId,
+        DeliveryStatus $status,
+        string $url,
+        string $requestBody,
+        ?int $responseStatus,
+        ?string $responseBody,
+    ): void {
+        $statement = $this->pdo->prepare(<<<'SQL'
+            INSERT INTO delivery_reports (id, message_id, status, url, request_body, response_status, response_body, sent_at)
+            VALUES (:id, :message_id, :status, :url, :request_body, :response_status, :response_body, :sent_at)
+            SQL);
+
+        $statement->execute([
+            'id' => Uuid::v4(),
+            'message_id' => $messageId,
+            'status' => $status->value,
+            'url' => $url,
+            'request_body' => $requestBody,
+            'response_status' => $responseStatus,
+            'response_body' => $responseBody,
+            'sent_at' => gmdate('Y-m-d\TH:i:s\Z'),
+        ]);
+    }
+
+    /** @return list<array{status: string, url: string, requestBody: string, responseStatus: ?int, responseBody: ?string, sentAt: string}> */
+    public function deliveryReports(string $messageId): array
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT * FROM delivery_reports WHERE message_id = :id ORDER BY sent_at ASC, rowid ASC',
+        );
+        $statement->execute(['id' => $messageId]);
+
+        return array_map(static fn (array $row): array => [
+            'status' => self::string($row['status']),
+            'url' => self::string($row['url']),
+            'requestBody' => self::string($row['request_body']),
+            'responseStatus' => $row['response_status'] === null ? null : self::int($row['response_status']),
+            'responseBody' => $row['response_body'] === null ? null : self::string($row['response_body']),
+            'sentAt' => self::string($row['sent_at']),
+        ], self::rows($statement));
+    }
+
+    public function latestSeq(): int
+    {
+        $statement = $this->pdo->query('SELECT COALESCE(MAX(seq), 0) FROM events');
+
+        return $statement === false ? 0 : self::int($statement->fetchColumn());
+    }
+
+    /** @return list<EventRow> */
+    public function eventsSince(int $seq): array
+    {
+        $statement = $this->pdo->prepare('SELECT * FROM events WHERE seq > :seq ORDER BY seq ASC LIMIT 200');
+        $statement->execute(['seq' => $seq]);
+
+        return array_map(static fn (array $row): array => [
+            'seq' => self::int($row['seq']),
+            'type' => self::string($row['type']),
+            'messageId' => $row['message_id'] === null ? null : self::string($row['message_id']),
+        ], self::rows($statement));
+    }
+
+    /** One-shot: reading the scenario also clears it. */
+    public function consumeScenario(): ?Scenario
+    {
+        $statement = $this->pdo->prepare("SELECT value FROM state WHERE key = 'scenario'");
+        $statement->execute();
+        $value = $statement->fetchColumn();
+
+        if (!is_string($value)) {
+            return null;
+        }
+
+        $this->pdo->exec("DELETE FROM state WHERE key = 'scenario'");
+
+        return Scenario::tryFrom($value);
+    }
+
+    public function setScenario(?Scenario $scenario): void
+    {
+        if ($scenario === null) {
+            $this->pdo->exec("DELETE FROM state WHERE key = 'scenario'");
+
+            return;
+        }
+
+        $statement = $this->pdo->prepare(
+            "INSERT INTO state (key, value) VALUES ('scenario', :value)
+             ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+        );
+        $statement->execute(['value' => $scenario->value]);
+    }
+
+    private function recordEvent(string $type, ?string $messageId): void
+    {
+        $statement = $this->pdo->prepare('INSERT INTO events (type, message_id) VALUES (:type, :message_id)');
+        $statement->execute(['type' => $type, 'message_id' => $messageId]);
+    }
+
+    private function prune(): void
+    {
+        $statement = $this->pdo->prepare(
+            'DELETE FROM messages WHERE id NOT IN (
+                SELECT id FROM messages ORDER BY created_at DESC, rowid DESC LIMIT :limit
+            )',
+        );
+        $statement->bindValue('limit', $this->maxMessages, PDO::PARAM_INT);
+        $statement->execute();
+    }
+
+    /** @param array<string, mixed> $row */
+    private static function hydrate(array $row): Message
+    {
+        $meta = json_decode(self::string($row['meta']), true);
+        $offsets = json_decode(self::string($row['ucs2_offsets']), true);
+        $encoding = $row['encoding'] === null ? null : Encoding::from(self::string($row['encoding']));
+
+        return Message::restore(
+            id: self::string($row['id']),
+            batchId: self::string($row['batch_id']),
+            provider: self::string($row['provider']),
+            channel: Channel::from(self::string($row['channel'])),
+            from: $row['sender'] === null ? null : self::string($row['sender']),
+            to: self::string($row['recipient']),
+            body: self::string($row['body']),
+            meta: self::meta($meta),
+            providerRef: $row['provider_ref'] === null ? null : self::string($row['provider_ref']),
+            status: MessageStatus::from(self::string($row['status'])),
+            segmentInfo: $encoding === null ? null : new SegmentInfo(
+                encoding: $encoding,
+                segments: self::int($row['segments']),
+                characters: self::int($row['characters']),
+                units: self::int($row['units']),
+                ucs2Offsets: is_array($offsets) ? array_values(array_map(self::int(...), $offsets)) : [],
+            ),
+            createdAt: self::string($row['created_at']),
+            readAt: ($row['read_at'] ?? null) === null ? null : self::string($row['read_at']),
+        );
+    }
+
+    /**
+     * PDO hands back untyped rows; this is the one place that narrows them.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function rows(PDOStatement $statement): array
+    {
+        $rows = [];
+
+        foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            if (is_array($row)) {
+                /** @var array<string, mixed> $row */
+                $rows[] = $row;
+            }
+        }
+
+        return $rows;
+    }
+
+    /** @return array<string, mixed> */
+    private static function meta(mixed $value): array
+    {
+        if (!is_array($value)) {
+            return [];
+        }
+
+        /** @var array<string, mixed> $value */
+        return $value;
+    }
+
+    private static function string(mixed $value): string
+    {
+        return is_scalar($value) ? (string) $value : '';
+    }
+
+    private static function int(mixed $value): int
+    {
+        return is_numeric($value) ? (int) $value : 0;
+    }
+}

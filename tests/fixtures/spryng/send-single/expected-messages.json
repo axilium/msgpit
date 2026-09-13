@@ -1,0 +1,13 @@
+[
+    {
+        "provider": "spryng",
+        "channel": "sms",
+        "from": "Acme",
+        "to": "+31612345678",
+        "body": "Your code is 123456",
+        "status": "accepted",
+        "encoding": "GSM-7",
+        "segments": 1,
+        "characters": 19
+    }
+]

@@ -1,0 +1,6 @@
+{
+    "status": 400,
+    "body": {
+        "errors": [{"errorCode": "recipients_empty", "errorMessage": "At least one recipient must be provided."}]
+    }
+}

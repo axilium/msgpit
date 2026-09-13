@@ -1,0 +1,11 @@
+{
+    "status": 401,
+    "body": {
+        "errors": [
+            {
+                "errorCode": "UnauthenticatedError",
+                "errorMessage": "Request for authenticated route '/spryng/v2/messages' was unauthenticated"
+            }
+        ]
+    }
+}

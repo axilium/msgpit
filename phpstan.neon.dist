@@ -1,0 +1,9 @@
+parameters:
+    level: max
+    paths:
+        - src
+        - tests
+        - public
+        - providers.php
+    excludePaths:
+        - tests/fixtures

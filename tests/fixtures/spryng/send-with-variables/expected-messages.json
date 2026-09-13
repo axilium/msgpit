@@ -1,0 +1,11 @@
+[
+    {
+        "to": "+31611111111",
+        "body": "Hi Ada, order 8821 is on its way.",
+        "meta": {"requestName": "order-update", "messageType": "NotificationsAndReminders"}
+    },
+    {
+        "to": "+31622222222",
+        "body": "Hi Alan, order 8822 is on its way."
+    }
+]

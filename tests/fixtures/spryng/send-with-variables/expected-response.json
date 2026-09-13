@@ -1,0 +1,4 @@
+{
+    "status": 202,
+    "body": {"data": {"requestId": "@uuid", "messageIds": ["@uuid", "@uuid"]}}
+}
