@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite
+          coverage: none
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dev tooling
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: PHPUnit
+        run: composer run test:php
+
+      - name: Markdown renderer
+        run: composer run test:js
+
+      - name: Release versioning
+        run: composer run test:shell
+
+      - name: PHPStan
+        run: composer run stan
+
+  image:
+    name: Image builds and answers
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: docker build -t msgpit:ci --build-arg MSGPIT_VERSION=ci .
+
+      # The image ships without vendor/ and without the source mounted, which is the one thing
+      # local development never exercises.
+      - name: Run and check it serves
+        run: |
+          docker run -d --name msgpit-ci -p 8080:8080 msgpit:ci
+          for i in $(seq 1 30); do
+            if [ "$(docker inspect --format '{{.State.Health.Status}}' msgpit-ci)" = healthy ]; then
+              break
+            fi
+            sleep 1
+          done
+
+          test "$(docker inspect --format '{{.State.Health.Status}}' msgpit-ci)" = healthy
+
+          curl -sf http://localhost:8080/healthz | grep -q '"status":"ok"'
+          curl -sf http://localhost:8080/ > /dev/null
+          test "$(curl -s http://localhost:8080/api/docs | grep -o '"slug"' | wc -l)" -gt 0
+
+          status=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            http://localhost:8080/spryng/v2/messages \
+            -H 'X-Api-Key: ci' -H 'Content-Type: application/json' \
+            -d '{"accountReference":"SPNL0000000","channel":"SMS","from":"CI",
+                 "body":{"text":"hello"},"recipients":[{"msisdn":"+31612345678"}]}')
+          test "$status" = 202
+
+          curl -s http://localhost:8080/api/messages | grep -q '"body":"hello"'
+          # docker exec runs as the image user; check the server process itself.
+          docker exec msgpit-ci ps -o user,comm | grep php | grep -q www-data
+
+      - name: Container logs on failure
+        if: failure()
+        run: docker logs msgpit-ci

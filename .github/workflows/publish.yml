@@ -1,0 +1,114 @@
+name: Publish
+
+on:
+  push:
+    branches: [main, dev]
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  publish:
+    name: Build and push
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The version is derived from the tag history, so a shallow clone will not do.
+          fetch-depth: 0
+
+      # A push to dev publishes a moving :dev tag; a push to main cuts a real release. The bump
+      # follows the conventional commits since the last tag: a breaking change bumps major, a
+      # feat bumps minor, anything else bumps patch.
+      # A push to dev publishes a moving :dev tag; a push to main cuts a real release, with the
+      # version decided by .github/next-version.sh from the conventional commits since the last tag.
+      - name: Work out the version and tags
+        id: version
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.ref_name }}" != main ]; then
+            {
+              echo "release=false"
+              echo "version=dev-${GITHUB_SHA::7}"
+              echo "tags=${IMAGE}:dev,${IMAGE}:dev-${GITHUB_SHA::7}"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          version=$(.github/next-version.sh)
+
+          if [ "$version" = skip ]; then
+            echo "Nothing new to release."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          IFS=. read -r major minor patch <<< "$version"
+
+          echo "Releasing ${version}"
+
+          {
+            echo "release=true"
+            echo "version=${version}"
+            echo "tags=${IMAGE}:${version},${IMAGE}:${major}.${minor},${IMAGE}:${major},${IMAGE}:latest"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        if: steps.version.outputs.skip != 'true'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        if: steps.version.outputs.skip != 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr.io
+        if: steps.version.outputs.skip != 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        if: steps.version.outputs.skip != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.version.outputs.tags }}
+          build-args: MSGPIT_VERSION=${{ steps.version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Tag the release
+        if: steps.version.outputs.release == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          git tag -a "v${VERSION}" -m "Release ${VERSION}"
+          git push origin "v${VERSION}"
+
+      - name: Create the GitHub release
+        if: steps.version.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --generate-notes \
+            --latest
