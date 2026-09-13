@@ -16,7 +16,8 @@ a realistic provider response comes back, and everything shows up in a web UI.
 - Delivery reports on demand. Mark a message delivered or failed and msgpit calls your webhook
   the way the provider would, then shows the response.
 - Forced failures, either through a magic recipient number or a one-shot toggle in the UI.
-- New messages appear instantly over SSE, no refresh.
+- New messages appear instantly over SSE, no refresh. The unread count is in the tab title, and
+  over https a desktop notification can announce one while you are working elsewhere.
 
 ## Running it
 

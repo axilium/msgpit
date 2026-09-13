@@ -113,6 +113,23 @@ them is a supported outcome, not a failure.
 `MSGPIT_IMAGE` is not read by msgpit itself: it is the variable the Docksal snippet above uses so
 a project can pin or override the image without editing the shared config.
 
+## Desktop notifications
+
+The tab title carries the unread count, so `(3) msgpit` tells you something arrived without
+switching to it.
+
+msgpit can also raise a desktop notification per captured message. Click the bell in the toolbar
+to turn it on. Notifications only appear while the tab is in the background, since a message you
+are already looking at needs no announcement, and a request to fifty recipients raises one
+notification rather than fifty.
+
+**This needs https.** The browser API is only available in a secure context, and Docksal serves
+projects over plain http by default. On http the bell explains this and takes you to the https
+address of the same page. Docksal's proxy always listens on 443, so
+`https://msgpit.<project>.docksal.site` works right away; you will get a certificate warning from
+its self-signed certificate, which you can accept. To lose the warning, install Docksal's mkcert
+addon and issue a certificate for the host.
+
 ## When something is wrong
 
 `fin up` waits for every container in the project to become healthy and fails the whole project if

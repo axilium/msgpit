@@ -34,6 +34,9 @@ You can test the unhappy path. Rate limits, invalid numbers, provider outages, r
 credentials: all reachable on demand, either by sending to a magic number or by arming a one-shot
 toggle. See [Failure scenarios](#docs/03-scenarios).
 
+You get told when something arrives. The unread count sits in the tab title, and over https a
+desktop notification can announce a captured message while you are working somewhere else.
+
 You can test delivery reports without a public URL or a tunnel. Mark a message delivered and
 msgpit calls your webhook with the payload the provider would send, then shows you what your app
 answered.

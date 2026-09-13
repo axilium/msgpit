@@ -11,6 +11,7 @@ const el = {
     scenario: document.getElementById('scenario'),
     clear: document.getElementById('clear'),
     markRead: document.getElementById('mark-read'),
+    notify: document.getElementById('notify'),
     navAll: document.getElementById('nav-all'),
     navProviders: document.getElementById('nav-providers'),
     navChannels: document.getElementById('nav-channels'),
@@ -202,11 +203,17 @@ const renderSidebar = () => {
         .join('') || '<li><button type="button" disabled><span>None yet</span></button></li>';
 };
 
+/** The unread count belongs in the title too: the tab is often the only thing you can see. */
+const renderTitle = () => {
+    document.title = state.unread > 0 ? `(${state.unread}) msgpit` : 'msgpit';
+};
+
 const renderStats = () => {
     const messages = visibleMessages();
     const segments = messages.reduce((total, message) => total + (message.segments ?? 0), 0);
     const recipients = new Set(messages.map((message) => message.to)).size;
 
+    renderTitle();
     el.statMessages.textContent = plural(messages.length, 'message');
     el.statSegments.textContent = plural(segments, 'segment');
     el.statRecipients.textContent = plural(recipients, 'recipient');
@@ -459,6 +466,136 @@ const loadDocs = async () => {
     `).join('');
 };
 
+
+/**
+ * Desktop notifications for captured messages.
+ *
+ * The Notifications API needs a secure context, and Docksal serves projects over plain http by
+ * default, so the button explains that rather than silently doing nothing. Over https it works,
+ * including with Docksal's self-signed certificate once you accept it.
+ */
+const notifications = {
+    key: 'msgpit.notifications',
+    queue: [],
+    timer: null,
+
+    get available() {
+        return 'Notification' in window && window.isSecureContext;
+    },
+
+    get permission() {
+        return this.available ? Notification.permission : 'unsupported';
+    },
+
+    get wanted() {
+        try {
+            return localStorage.getItem(this.key) === 'on';
+        } catch {
+            return false;
+        }
+    },
+
+    set wanted(value) {
+        try {
+            localStorage.setItem(this.key, value ? 'on' : 'off');
+        } catch {
+            // A private window refuses storage; the choice then lasts for this page only.
+        }
+    },
+
+    get active() {
+        return this.available && this.permission === 'granted' && this.wanted;
+    },
+
+    render() {
+        const button = el.notify;
+
+        button.setAttribute('aria-pressed', String(this.active));
+
+        if (!this.available) {
+            button.dataset.state = 'unavailable';
+            button.title = 'Desktop notifications need https. Click to reopen this page securely.';
+
+            return;
+        }
+
+        if (this.permission === 'denied') {
+            button.dataset.state = 'unavailable';
+            button.title = 'Your browser is blocking notifications for this site.';
+
+            return;
+        }
+
+        button.dataset.state = this.active ? 'on' : 'off';
+        button.title = this.active ? 'Desktop notifications are on' : 'Turn on desktop notifications';
+    },
+
+    async toggle() {
+        if (!this.available) {
+            // http cannot ask for permission at all, so send the user somewhere that can.
+            if (location.protocol === 'http:') {
+                location.href = `https://${location.host}${location.pathname}${location.hash}`;
+            }
+
+            return;
+        }
+
+        if (this.permission === 'denied') {
+            return;
+        }
+
+        if (this.permission === 'default') {
+            this.wanted = await Notification.requestPermission() === 'granted';
+            this.render();
+
+            return;
+        }
+
+        this.wanted = !this.wanted;
+        this.render();
+    },
+
+    /** Collected briefly, so one request to fifty recipients is one notification and not fifty. */
+    queueMessage(message) {
+        if (!this.active || !document.hidden) {
+            return;
+        }
+
+        this.queue.push(message);
+        clearTimeout(this.timer);
+        this.timer = setTimeout(() => this.flush(), 400);
+    },
+
+    flush() {
+        const queued = this.queue.splice(0);
+
+        if (queued.length === 0) {
+            return;
+        }
+
+        const single = queued.length === 1 ? queued[0] : null;
+        const notification = new Notification(
+            single ? `${single.provider} to ${single.to}` : `${queued.length} new messages`,
+            {
+                body: single ? single.body : queued.map((message) => message.to).join(', '),
+                tag: 'msgpit',
+                icon: document.querySelector('link[rel="icon"]')?.href,
+            },
+        );
+
+        notification.onclick = () => {
+            window.focus();
+            notification.close();
+
+            if (single) {
+                state.touched = true;
+                closeDocs();
+                openMessage(single.id);
+            }
+        };
+    },
+};
+
 const setConnection = (label, className) => {
     el.connection.textContent = label;
     el.connection.className = `connection ${className}`;
@@ -522,6 +659,8 @@ el.scenario.addEventListener('change', () => api('/scenario', {
     body: JSON.stringify({scenario: el.scenario.value || null}),
 }));
 
+el.notify.addEventListener('click', () => notifications.toggle());
+
 el.markRead.addEventListener('click', async () => {
     await api('/messages/read', {method: 'POST'});
     state.signature = '';
@@ -554,6 +693,10 @@ const connect = () => {
         state.signature = '';
         refresh();
 
+        if (payload.type === 'message' && payload.message) {
+            notifications.queueMessage(payload.message);
+        }
+
         // A status change on the open message should update the pane, not just the list.
         if ((payload.type === 'status' || payload.type === 'read') && payload.message?.id === state.selectedId) {
             openMessage(state.selectedId);
@@ -570,6 +713,7 @@ const connect = () => {
 await refresh();
 await loadProviders();
 await loadDocs();
+notifications.render();
 
 // Deep link straight into a reference page.
 if (location.hash.startsWith('#docs/')) {

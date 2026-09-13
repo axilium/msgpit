@@ -29,6 +29,14 @@
             <option value="RateLimited">Next request: rate limited</option>
             <option value="ServerError">Next request: server error</option>
         </select>
+        <button id="notify" type="button" class="ghost icon" aria-pressed="false" title="Desktop notifications">
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path class="bell" d="M10 3a4.5 4.5 0 0 0-4.5 4.5c0 3-1.2 4-1.8 4.6a.6.6 0 0 0 .42 1.03h11.76a.6.6 0 0 0 .42-1.03c-.6-.6-1.8-1.6-1.8-4.6A4.5 4.5 0 0 0 10 3z"/>
+                <path class="clapper" d="M8.4 15.6a1.8 1.8 0 0 0 3.2 0"/>
+                <path class="slash" d="M4 16 16 4"/>
+            </svg>
+            <span class="sr-only">Desktop notifications</span>
+        </button>
         <button id="mark-read" type="button" class="ghost" hidden>Mark all read</button>
         <button id="clear" type="button" class="ghost danger">Clear</button>
     </div>

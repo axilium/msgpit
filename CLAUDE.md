@@ -80,6 +80,13 @@ core), `rawRequest`, `createdAt`, `readAt`.
 
 A message is unread until it is opened in the UI. The read state is server-side, so it is shared
 between tabs, and it is independent of `status`: marking a message delivered does not make it read.
+The count appears in the tab title as `(3) msgpit`.
+
+Desktop notifications are opt-in through the bell in the toolbar, fire only while the tab is
+hidden, and collapse a multi-recipient request into one notification. The Notifications API needs
+a secure context and Docksal serves http by default, so on http the button says so and offers the
+https address rather than failing silently. Keep that fallback: it is the difference between a
+feature that looks broken and one that explains itself.
 
 The UI's top bar is dark in both light and dark themes; the workspace below it is the lighter
 surface. Colours come from the custom properties at the top of `style.css`, never hardcoded.
