@@ -306,6 +306,7 @@ const renderEmptyState = () => {
                     </span>
                 `).join('')}
             </span>
+            <span class="empty-or">or drop a .eml file anywhere on this page</span>
         `;
 };
 

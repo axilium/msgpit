@@ -1547,6 +1547,13 @@ pre {
     margin-bottom: 4px;
 }
 
+/* The second way in, and the one nobody guesses is there. */
+.empty-or {
+    display: block;
+    margin-top: 12px;
+    font-size: 12px;
+}
+
 .endpoints {
     display: flex;
     flex-direction: column;
