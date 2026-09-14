@@ -4,20 +4,23 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>msgpit</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7.5'%20fill='%232f6feb'/%3E%3Cpath%20d='M9%206h14a4%204%200%200%201%204%204v8a4%204%200%200%201-4%204h-7.2l-4.6%203.8A1%201%200%200%201%209.6%2025v-3H9a4%204%200%200%201-4-4v-8a4%204%200%200%201%204-4z'%20fill='%23fff'/%3E%3Cpath%20d='M16%209.5v6.2m0%200%203-3m-3%203-3-3'%20fill='none'%20stroke='%232f6feb'%20stroke-width='2.2'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3Cpath%20d='M11%2018.5h10'%20stroke='%239dbcf7'%20stroke-width='2'%20stroke-linecap='round'/%3E%3C/svg%3E">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7.5'%20fill='%232f6feb'/%3E%3Cpath%20d='M8%205h16a4.5%204.5%200%200%201%204.5%204.5v9A4.5%204.5%200%200%201%2024%2023h-8.4l-5.3%204.4A1.1%201.1%200%200%201%208.5%2026.6V23H8a4.5%204.5%200%200%201-4.5-4.5v-9A4.5%204.5%200%200%201%208%205z'%20fill='%23fff'/%3E%3Cg%20fill='%232f6feb'%3E%3Ccircle%20cx='10.5'%20cy='14'%20r='2.1'/%3E%3Ccircle%20cx='16'%20cy='14'%20r='2.1'/%3E%3Ccircle%20cx='21.5'%20cy='14'%20r='2.1'/%3E%3C/g%3E%3C/svg%3E">
     <link rel="stylesheet" href="/ui/style.css">
 </head>
 <body>
 <header class="topbar">
-    <span class="brand">
+    <a class="brand" href="#" id="brand" title="Back to the inbox">
         <svg viewBox="0 0 32 32" aria-hidden="true">
             <rect class="plate" width="32" height="32" rx="7.5"/>
-            <path class="bubble" d="M9 6h14a4 4 0 0 1 4 4v8a4 4 0 0 1-4 4h-7.2l-4.6 3.8A1 1 0 0 1 9.6 25v-3H9a4 4 0 0 1-4-4v-8a4 4 0 0 1 4-4z"/>
-            <path class="arrow" d="M16 9.5v6.2m0 0 3-3m-3 3-3-3"/>
-            <path class="rule" d="M11 18.5h10"/>
+            <path class="bubble" d="M8 5h16a4.5 4.5 0 0 1 4.5 4.5v9A4.5 4.5 0 0 1 24 23h-8.4l-5.3 4.4A1.1 1.1 0 0 1 8.5 26.6V23H8a4.5 4.5 0 0 1-4.5-4.5v-9A4.5 4.5 0 0 1 8 5z"/>
+            <g class="dots">
+                <circle cx="10.5" cy="14" r="2.1"/>
+                <circle cx="16" cy="14" r="2.1"/>
+                <circle cx="21.5" cy="14" r="2.1"/>
+            </g>
         </svg>
         msgpit
-    </span>
+    </a>
 
     <span class="search-field">
         <svg viewBox="0 0 16 16" aria-hidden="true">

@@ -50,6 +50,7 @@ const el = {
     statMessages: document.getElementById('stat-messages'),
     statSegments: document.getElementById('stat-segments'),
     statRecipients: document.getElementById('stat-recipients'),
+    brand: document.getElementById('brand'),
     connection: document.getElementById('connection'),
     import: document.getElementById('import'),
     importInput: document.getElementById('import-input'),
@@ -1190,6 +1191,17 @@ document.querySelector('.sidebar').addEventListener('click', (event) => {
         state.filter = {...state.filter, [type]: state.filter[type] === button.dataset.value ? '' : button.dataset.value};
     }
 
+    state.signature = '';
+    refresh();
+});
+
+// The logo is the way back: reference closed, filters dropped, the whole inbox again.
+el.brand.addEventListener('click', (event) => {
+    event.preventDefault();
+    closeDocs();
+    el.search.value = '';
+    state.search = '';
+    state.filter = {provider: '', channel: ''};
     state.signature = '';
     refresh();
 });
