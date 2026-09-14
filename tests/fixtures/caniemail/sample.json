@@ -1,0 +1,187 @@
+{
+ "last_update_date": "2026-01-01 00:00:00 +0000",
+ "nicenames": {
+  "family": {}
+ },
+ "data": [
+  {
+   "slug": "css-margin",
+   "title": "margin",
+   "category": "css",
+   "stats": {
+    "client-0": {
+     "platform": {
+      "1": "y"
+     }
+    },
+    "client-1": {
+     "platform": {
+      "1": "y"
+     }
+    },
+    "client-2": {
+     "platform": {
+      "1": "y"
+     }
+    },
+    "client-3": {
+     "platform": {
+      "1": "a"
+     }
+    }
+   }
+  },
+  {
+   "slug": "css-gap",
+   "title": "gap",
+   "category": "css",
+   "stats": {
+    "client-0": {
+     "platform": {
+      "1": "n"
+     }
+    },
+    "client-1": {
+     "platform": {
+      "1": "n"
+     }
+    },
+    "client-2": {
+     "platform": {
+      "1": "a"
+     }
+    },
+    "client-3": {
+     "platform": {
+      "1": "y"
+     }
+    }
+   }
+  },
+  {
+   "slug": "css-color",
+   "title": "color",
+   "category": "css",
+   "stats": {
+    "client-0": {
+     "platform": {
+      "1": "y"
+     }
+    },
+    "client-1": {
+     "platform": {
+      "1": "y"
+     }
+    },
+    "client-2": {
+     "platform": {
+      "1": "y"
+     }
+    },
+    "client-3": {
+     "platform": {
+      "1": "y"
+     }
+    }
+   }
+  },
+  {
+   "slug": "html-style",
+   "title": "<style> element",
+   "category": "html",
+   "stats": {
+    "client-0": {
+     "platform": {
+      "1": "y"
+     }
+    },
+    "client-1": {
+     "platform": {
+      "1": "a"
+     }
+    },
+    "client-2": {
+     "platform": {
+      "1": "n"
+     }
+    },
+    "client-3": {
+     "platform": {
+      "1": "y"
+     }
+    }
+   }
+  },
+  {
+   "slug": "html-align",
+   "title": "align attribute",
+   "category": "html",
+   "stats": {
+    "client-0": {
+     "platform": {
+      "1": "y"
+     }
+    },
+    "client-1": {
+     "platform": {
+      "1": "y"
+     }
+    },
+    "client-2": {
+     "platform": {
+      "1": "n"
+     }
+    },
+    "client-3": {
+     "platform": {
+      "1": "u"
+     }
+    }
+   }
+  },
+  {
+   "slug": "html-table",
+   "title": "<table> element",
+   "category": "html",
+   "stats": {
+    "client-0": {
+     "platform": {
+      "1": "y"
+     }
+    },
+    "client-1": {
+     "platform": {
+      "1": "y"
+     }
+    },
+    "client-2": {
+     "platform": {
+      "1": "y"
+     }
+    },
+    "client-3": {
+     "platform": {
+      "1": "y"
+     }
+    }
+   }
+  },
+  {
+   "slug": "css-filter",
+   "title": "filter",
+   "category": "css",
+   "stats": {
+    "client-0": {
+     "platform": {
+      "1": "u"
+     }
+    },
+    "client-1": {
+     "platform": {
+      "1": "u"
+     }
+    }
+   }
+  }
+ ]
+}

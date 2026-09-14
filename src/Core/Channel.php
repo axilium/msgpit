@@ -8,6 +8,7 @@ namespace Msgpit\Core;
 enum Channel: string
 {
     case Sms = 'sms';
+    case Email = 'email';
     case Push = 'push';
     case WhatsApp = 'whatsapp';
 }

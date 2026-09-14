@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Msgpit\Core;
 
+use Msgpit\Mime\ParsedMessage;
 use PDO;
 use PDOStatement;
 
@@ -19,6 +20,12 @@ final class Storage
         private readonly int $maxMessages = 1000,
     ) {
         $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        // The web server and the SMTP listener are separate processes writing the same file.
+        // WAL lets them do that concurrently; the timeout covers the moments they still collide.
+        $this->pdo->exec('PRAGMA journal_mode=WAL');
+        $this->pdo->exec('PRAGMA busy_timeout=5000');
+
         $this->migrate();
     }
 
@@ -80,9 +87,57 @@ final class Storage
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS cache (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                expires_at INTEGER NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS parts (
+                id TEXT PRIMARY KEY,
+                message_id TEXT NOT NULL,
+                position INTEGER NOT NULL,
+                content_type TEXT NOT NULL,
+                content_id TEXT,
+                filename TEXT,
+                disposition TEXT,
+                size INTEGER NOT NULL,
+                content BLOB NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS parts_message ON parts (message_id);
             SQL);
 
         $this->addColumn('messages', 'read_at', 'TEXT');
+    }
+
+    /**
+     * A small cache with an expiry, shared by anything that asks the network the same question
+     * twice. It outlives the request on purpose: twenty messages from one domain then cost one
+     * lookup between them, not twenty.
+     */
+    public function cached(string $key): ?string
+    {
+        $statement = $this->pdo->prepare('SELECT value FROM cache WHERE key = :key AND expires_at > :now');
+        $statement->execute(['key' => $key, 'now' => time()]);
+        $value = $statement->fetchColumn();
+
+        return is_string($value) ? $value : null;
+    }
+
+    public function cache(string $key, string $value, int $ttl): void
+    {
+        $statement = $this->pdo->prepare(
+            'INSERT INTO cache (key, value, expires_at) VALUES (:key, :value, :expires)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at',
+        );
+        // No floor on the ttl: a caller that knows an answer is already stale should be able to say
+        // so, and an entry written into the past simply never comes back.
+        $statement->execute(['key' => $key, 'value' => $value, 'expires' => time() + $ttl]);
+
+        // Cheap enough to do inline, and it keeps a long-lived volume from collecting dead rows.
+        $this->pdo->prepare('DELETE FROM cache WHERE expires_at < :now')->execute(['now' => time() - 3600]);
     }
 
     /** Databases created before a column existed are upgraded in place. */
@@ -167,6 +222,92 @@ final class Storage
     }
 
     /**
+     * Mail arrives over SMTP rather than as an HTTP request, so the raw form is the message
+     * itself and the MIME parts are stored alongside it.
+     *
+     * @param list<Message> $messages
+     */
+    public function storeMail(array $messages, ParsedMessage $parsed): void
+    {
+        $raw = new RawRequest('SMTP', 'inbound', [], $parsed->raw);
+
+        $this->store($messages, $raw);
+
+        $statement = $this->pdo->prepare(<<<'SQL'
+            INSERT INTO parts (id, message_id, position, content_type, content_id, filename, disposition, size, content)
+            VALUES (:id, :message_id, :position, :content_type, :content_id, :filename, :disposition, :size, :content)
+            SQL);
+
+        foreach ($messages as $message) {
+            foreach ($parsed->parts as $position => $part) {
+                $statement->bindValue('id', Uuid::v4());
+                $statement->bindValue('message_id', $message->id);
+                $statement->bindValue('position', $position, PDO::PARAM_INT);
+                $statement->bindValue('content_type', $part->contentType);
+                $statement->bindValue('content_id', $part->contentId);
+                $statement->bindValue('filename', $part->filename);
+                $statement->bindValue('disposition', $part->isAttachment() ? 'attachment' : ($part->isInline() ? 'inline' : 'body'));
+                $statement->bindValue('size', $part->size(), PDO::PARAM_INT);
+                $statement->bindValue('content', $part->content, PDO::PARAM_LOB);
+                $statement->execute();
+            }
+        }
+    }
+
+    /**
+     * @return list<array{id: string, contentType: string, contentId: ?string, filename: ?string, disposition: string, size: int}>
+     */
+    public function parts(string $messageId): array
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT id, content_type, content_id, filename, disposition, size
+             FROM parts WHERE message_id = :id ORDER BY position ASC',
+        );
+        $statement->execute(['id' => $messageId]);
+
+        return array_map(static fn (array $row): array => [
+            'id' => self::string($row['id']),
+            'contentType' => self::string($row['content_type']),
+            'contentId' => $row['content_id'] === null ? null : self::string($row['content_id']),
+            'filename' => $row['filename'] === null ? null : self::string($row['filename']),
+            'disposition' => self::string($row['disposition']),
+            'size' => self::int($row['size']),
+        ], self::rows($statement));
+    }
+
+    /** @return array{contentType: string, filename: ?string, content: string}|null */
+    public function part(string $messageId, string $partId): ?array
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT content_type, filename, content FROM parts WHERE message_id = :message AND id = :id',
+        );
+        $statement->execute(['message' => $messageId, 'id' => $partId]);
+        $rows = self::rows($statement);
+
+        if ($rows === []) {
+            return null;
+        }
+
+        return [
+            'contentType' => self::string($rows[0]['content_type']),
+            'filename' => $rows[0]['filename'] === null ? null : self::string($rows[0]['filename']),
+            'content' => self::string($rows[0]['content']),
+        ];
+    }
+
+    /** The part an html body points at with cid:, so the preview can resolve it. */
+    public function partByContentId(string $messageId, string $contentId): ?string
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT id FROM parts WHERE message_id = :message AND content_id = :cid',
+        );
+        $statement->execute(['message' => $messageId, 'cid' => trim($contentId, '<>')]);
+        $rows = self::rows($statement);
+
+        return $rows === [] ? null : self::string($rows[0]['id']);
+    }
+
+    /**
      * @param array{provider?: string, channel?: string, to?: string, since?: string} $filters
      * @return list<Message>
      */
@@ -232,6 +373,7 @@ final class Storage
     {
         $this->pdo->exec('DELETE FROM messages');
         $this->pdo->exec('DELETE FROM delivery_reports');
+        $this->pdo->exec('DELETE FROM parts');
         $this->recordEvent('cleared', null);
     }
 
@@ -344,6 +486,10 @@ final class Storage
         );
         $statement->bindValue('limit', $this->maxMessages, PDO::PARAM_INT);
         $statement->execute();
+
+        // Attachments are the bulk of the database, so they must not outlive their message.
+        $this->pdo->exec('DELETE FROM parts WHERE message_id NOT IN (SELECT id FROM messages)');
+        $this->pdo->exec('DELETE FROM delivery_reports WHERE message_id NOT IN (SELECT id FROM messages)');
     }
 
     /** @param array<string, mixed> $row */

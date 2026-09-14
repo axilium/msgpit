@@ -16,6 +16,11 @@ a realistic provider response comes back, and everything shows up in a web UI.
 - Delivery reports on demand. Mark a message delivered or failed and msgpit calls your webhook
   the way the provider would, then shows the response.
 - Forced failures, either through a magic recipient number or a one-shot toggle in the UI.
+- **Email too.** msgpit speaks SMTP on 1025, so a project has one inbox for everything it sends
+  rather than a mail catcher beside a message catcher. Html is previewed as the recipient sees it,
+  inline images and all, with attachments to download.
+- Html is checked against what email clients actually support, links are checked on request, and
+  mail is scored with SpamAssassin when you point msgpit at one.
 - New messages appear instantly over SSE, no refresh. The unread count is in the tab title, and
   over https a desktop notification can announce one while you are working elsewhere.
 
@@ -66,6 +71,7 @@ The reference documentation lives in [`docs/`](docs/) and is served inside the a
 - [Encoding and segments](docs/04-segments.md)
 - [Providers](docs/05-providers.md)
 - [HTTP API](docs/06-api.md)
+- [Email](docs/07-email.md)
 
 ## HTTP API
 
@@ -77,6 +83,8 @@ a message was sent, then clear.
 | `GET /api/messages?provider=&channel=&to=&since=` | List messages, newest first |
 | `GET /api/messages/{id}` | One message with its raw request and delivery reports |
 | `DELETE /api/messages` | Clear all |
+| `POST /api/messages/import` | Import a raw `.eml` (body is the file) |
+| `POST /api/messages/{id}/authentication` | Rebuild the report with the SPF, DKIM, DMARC, rDNS and blocklist checks |
 | `POST /api/messages/{id}/dlr` | `{"status":"delivered"}` sends a delivery report |
 | `POST /api/scenario` | `{"scenario":"ServerError"}` fails the next provider request |
 | `GET /api/providers` | Enabled providers and their capabilities |

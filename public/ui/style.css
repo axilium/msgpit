@@ -20,13 +20,21 @@
     --warn: #8a4209;
     --warn-soft: #fce7b5;
 
-    /* The top bar is dark in both themes, so the workspace reads as the lighter surface. */
-    --topbar-bg: #14181e;
+    /* Charts need hues that stay apart as a filled shape. The text colours above are dark enough
+       to read on a light background, which makes the amber one brown and puts it next to the red. */
+    --chart-ok: #1a9e4b;
+    --chart-warn: #f59e0b;
+    --chart-bad: #dc2626;
+
+    /* The top bar is dark in both themes, so the workspace reads as the lighter surface.
+       Dark grey-blue rather than near-black: heavy enough to read as a bar, not as ink. */
+    --topbar-bg: #242c37;
     --topbar-text: #f2f5f8;
-    --topbar-soft: #97a2af;
-    --topbar-border: #2c333c;
-    --topbar-control: #1f252d;
-    --topbar-control-hover: #2a323b;
+    --topbar-soft: #c2cbd7;
+    --topbar-border: #3a4553;
+    --topbar-control: #465364;
+    --topbar-control-hover: #515f72;
+    --topbar-control-border: #7d8c9f;
 
     --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
     --radius: 7px;
@@ -34,10 +42,12 @@
 
 @media (prefers-color-scheme: dark) {
     :root {
-        --topbar-bg: #0a0d11;
-        --topbar-border: #232a33;
-        --topbar-control: #171c23;
-        --topbar-control-hover: #212831;
+        --topbar-bg: #171e27;
+        --topbar-soft: #a9b5c4;
+        --topbar-border: #2b3542;
+        --topbar-control: #333f4e;
+        --topbar-control-hover: #3c4959;
+        --topbar-control-border: #64717f;
 
         --bg: #0c0f13;
         --bg-panel: #161a20;
@@ -56,6 +66,10 @@
         --danger-soft: #3f1c1c;
         --warn: #f0b849;
         --warn-soft: #40320f;
+
+        --chart-ok: #34d399;
+        --chart-warn: #fbbf24;
+        --chart-bad: #f87171;
     }
 }
 
@@ -63,9 +77,17 @@
     box-sizing: border-box;
 }
 
+html {
+    /* The page itself never scrolls, so nothing should rubber-band with it. */
+    overscroll-behavior: none;
+    height: 100%;
+}
+
 body {
     margin: 0;
     height: 100vh;
+    overflow: hidden;
+    overscroll-behavior: none;
     display: flex;
     flex-direction: column;
     background: var(--bg);
@@ -95,8 +117,15 @@ body {
     color: var(--topbar-text);
 }
 
+/* The two fields you type or pick in have to read as fields against the bar, not as bar. */
+.topbar input,
+.topbar select {
+    border-color: var(--topbar-control-border);
+}
+
 .topbar input::placeholder {
     color: var(--topbar-soft);
+    opacity: 1;
 }
 
 .topbar input:hover,
@@ -112,8 +141,12 @@ body {
     outline-color: var(--accent);
 }
 
-.topbar button.danger {
-    color: #ff9a92;
+.topbar input:focus,
+.topbar select:focus {
+    background: var(--topbar-control-hover);
+    border-color: var(--accent);
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
 }
 
 button.icon {
@@ -168,6 +201,8 @@ button.icon[data-state="unavailable"] {
 
 .brand {
     display: flex;
+    color: inherit;
+    text-decoration: none;
     align-items: center;
     gap: 7px;
     font-weight: 600;
@@ -181,26 +216,44 @@ button.icon[data-state="unavailable"] {
     height: 19px;
 }
 
+.brand:hover svg {
+    opacity: 0.85;
+}
+
+.brand:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: var(--radius);
+}
+
 .brand .plate { fill: var(--accent); }
 .brand .bubble { fill: #fff; }
+.brand .dots { fill: var(--accent); }
 
-.brand .arrow {
-    fill: none;
-    stroke: var(--accent);
-    stroke-width: 2.2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-}
-
-.brand .rule {
-    stroke: #9dbcf7;
-    stroke-width: 2;
-    stroke-linecap: round;
-}
-
-.topbar input[type="search"] {
+.search-field {
+    position: relative;
+    display: flex;
     flex: 1;
     max-width: 420px;
+}
+
+.search-field input[type="search"] {
+    width: 100%;
+    padding-left: 29px;
+}
+
+.search-field svg {
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    width: 15px;
+    height: 15px;
+    margin-top: -7px;
+    fill: none;
+    stroke: var(--topbar-soft);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    pointer-events: none;
 }
 
 .topbar-actions {
@@ -256,6 +309,50 @@ button.danger {
     border-color: var(--border-strong);
 }
 
+/* Reference menu */
+
+.menu {
+    position: relative;
+}
+
+.menu-list {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 20;
+    min-width: 220px;
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-panel);
+    box-shadow: 0 12px 28px rgb(0 0 0 / 0.22);
+}
+
+/* The menu belongs to the light workspace, not to the dark bar it hangs from. */
+.topbar .menu-list button {
+    display: block;
+    width: 100%;
+    padding: 5px 8px;
+    border: 0;
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text);
+    text-align: left;
+}
+
+.topbar .menu-list button:hover {
+    background: var(--bg-hover);
+    border-color: transparent;
+}
+
+.topbar .menu-list button[aria-current="true"] {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+}
+
 /* Workspace */
 
 .workspace {
@@ -268,6 +365,7 @@ button.danger {
 /* Sidebar */
 
 .sidebar {
+    overscroll-behavior: contain;
     padding: 12px 8px;
     border-right: 1px solid var(--border);
     overflow-y: auto;
@@ -328,9 +426,43 @@ button.danger {
 /* Message list */
 
 .list {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
     border-right: 1px solid var(--border);
-    overflow-y: auto;
+    overflow: hidden;
     background: var(--bg-panel);
+}
+
+/* The bar stays put while the list below it scrolls. */
+.list-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px 5px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-sunken);
+}
+
+.list-title {
+    margin-right: auto;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-faint);
+}
+
+.list-bar button {
+    padding: 2px 7px;
+    font-size: 11px;
+}
+
+.list-scroll {
+    overscroll-behavior: contain;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
 }
 
 .list ol {
@@ -448,15 +580,38 @@ button.danger {
 .tag.status-failed { background: var(--danger-soft); color: var(--danger); }
 .tag.encoding-ucs2 { background: var(--warn-soft); color: var(--warn); }
 
+/* An import was dragged in, not delivered. It should not read like any other provider tag. */
+.tag.imported { background: var(--warn-soft); color: var(--warn); }
+
+/* Running text, not a flex row: the sentence has punctuation that must stay against its word. */
+.imported-note {
+    margin: 6px 0 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-soft);
+}
+
+.imported-note .tag {
+    margin-right: 4px;
+}
+
+.imported-note code {
+    font-family: var(--mono);
+    font-size: 11px;
+}
+
 /* Detail */
 
 .detail {
+    overscroll-behavior: contain;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
 }
 
+/* The head and the tabs stay put; only the panel below them scrolls. */
 .detail-head {
+    flex-shrink: 0;
     padding: 16px 20px 0;
 }
 
@@ -474,10 +629,36 @@ button.danger {
 }
 
 .tabs {
+    flex-shrink: 0;
     display: flex;
     gap: 2px;
     padding: 0 20px;
     border-bottom: 1px solid var(--border);
+
+    /* A mail can have seven tabs, which will not fit in a narrow pane. They scroll sideways
+       rather than wrapping, and that scroll stays here: the pane behind it must not move. */
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+    display: none;
+}
+
+/* The fade is the only hint that there is more, since the scrollbar is hidden. It is a mask, so
+   it costs no colour and works in either theme. */
+.tabs.fade-right {
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+
+.tabs.fade-left {
+    mask-image: linear-gradient(to right, transparent, #000 28px);
+}
+
+.tabs.fade-left.fade-right {
+    mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
 }
 
 .tabs button {
@@ -487,6 +668,10 @@ button.danger {
     border-radius: 0;
     background: transparent;
     color: var(--text-soft);
+
+    /* No shrinking and no wrapping: "HTML check" stays one line, badge and all. */
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .tabs button:hover {
@@ -497,19 +682,63 @@ button.danger {
 .tabs button[aria-selected="true"] {
     color: var(--accent);
     border-bottom-color: var(--accent);
+}
+
+.tabs button[aria-selected="true"] .tab-label {
     font-weight: 600;
+}
+
+/*
+ * The label is always as wide as its own bold version. Selecting a tab makes it bold, and without
+ * this every tab to the right of it shifts as you click along the row. The grid takes the width of
+ * its widest item, and the bold copy underneath has no height and is never read out.
+ */
+.tab-label {
+    display: inline-grid;
+    justify-items: start;
+}
+
+.tab-label::after {
+    content: attr(data-label);
+    font-weight: 600;
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
 }
 
 .tabs .count {
     margin-left: 5px;
     font-size: 10px;
-    padding: 0 5px;
+    padding: 1px 6px;
     border-radius: 999px;
     background: var(--bg-sunken);
     color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+}
+
+/* A verdict badge: the number is only useful if you can tell at a glance how to read it. */
+.tabs .count.ok {
+    background: var(--ok-soft);
+    color: var(--ok);
+    font-weight: 600;
+}
+
+.tabs .count.warn {
+    background: var(--warn-soft);
+    color: var(--warn);
+    font-weight: 600;
+}
+
+.tabs .count.bad {
+    background: var(--danger-soft);
+    color: var(--danger);
+    font-weight: 600;
 }
 
 .panel {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
     padding: 18px 20px;
 }
 
@@ -562,6 +791,468 @@ dl.fields dd {
     font-family: var(--mono);
     font-size: 12px;
     word-break: break-all;
+}
+
+/* Mail */
+
+.mail-preview {
+    width: 100%;
+    min-height: 320px;
+    height: 60vh;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    /* The mail decides its own colours; a white sheet is what a mail client shows. */
+    background: #fff;
+    color-scheme: light;
+}
+
+/* A heading with a control on the same line. */
+/* The switch belongs next to the heading it applies to, not at the far edge of the pane. */
+.body-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 22px 0 8px;
+}
+
+.body-head h3 {
+    margin: 0;
+}
+
+.switch {
+    display: inline-flex;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+/* The second switch of a pair: it changes how one view is drawn, not which view you are in. */
+.switch.subtle {
+    border-color: var(--border);
+}
+
+.switch.subtle button[aria-pressed="true"] {
+    background: var(--bg-sunken);
+    color: var(--text);
+}
+
+.switch button {
+    border: 0;
+    border-radius: 0;
+    padding: 3px 10px;
+    font-size: 12px;
+    background: var(--bg-panel);
+    color: var(--text-soft);
+}
+
+.switch button + button {
+    border-left: 1px solid var(--border);
+}
+
+.switch button[aria-pressed="true"] {
+    background: var(--accent);
+    color: var(--on-accent);
+    font-weight: 600;
+}
+
+.switch button[aria-pressed="true"]:hover {
+    background: var(--accent);
+}
+
+.attachments {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.attachments a {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 6px;
+    color: inherit;
+    text-decoration: none;
+    background: var(--bg-panel);
+}
+
+.attachments a:hover {
+    border-color: var(--accent);
+    background: var(--bg-hover);
+}
+
+.attachment-name {
+    font-weight: 600;
+    word-break: break-all;
+}
+
+.attachment-meta {
+    color: var(--text-faint);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+/* The raw message, laid out by structure */
+
+.raw-message {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-sunken);
+    padding: 12px 14px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    line-height: 1.65;
+    overflow-x: auto;
+}
+
+.raw-line {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/*
+ * One header block, aligned on its own: the values of this block start at the same column, but a
+ * long Content-Disposition in an attachment does not shift the headers at the top of the message.
+ * The name column never takes more than part of the width, so a long header name cannot push the
+ * values out of sight.
+ */
+.raw-headers {
+    display: grid;
+    grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+    column-gap: 10px;
+}
+
+.raw-name {
+    max-width: 32ch;
+    color: var(--accent);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.raw-value {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* A continuation line of a folded header: no name, so it starts in the value column. */
+.raw-folded {
+    grid-column: 2;
+    color: var(--text-soft);
+}
+
+.raw-blank {
+    height: 8px;
+}
+
+.raw-boundary {
+    margin: 10px 0 6px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+    display: inline-block;
+}
+
+/* Fifteen thousand characters of base64 tell you nothing until you ask for them. */
+.blob {
+    margin: 2px 0;
+}
+
+.blob summary {
+    cursor: pointer;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 3px 6px;
+    border-radius: 4px;
+    background: var(--bg-hover);
+    color: var(--text-soft);
+}
+
+.blob summary::marker {
+    color: var(--text-faint);
+}
+
+.blob-preview {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.blob-size {
+    margin-left: auto;
+    color: var(--text-faint);
+    white-space: nowrap;
+}
+
+.blob pre {
+    margin: 4px 0 0;
+    max-height: 260px;
+    overflow: auto;
+    word-break: break-all;
+    white-space: pre-wrap;
+    font-size: 11px;
+}
+
+/* Headers and source */
+
+table.headers {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 12.5px;
+}
+
+table.headers td {
+    padding: 5px 14px 5px 0;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+}
+
+.header-name {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--accent);
+    white-space: nowrap;
+}
+
+.header-value {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    word-break: break-word;
+    width: 100%;
+}
+
+pre.source-html {
+    max-height: 60vh;
+    white-space: pre;
+    overflow: auto;
+    overscroll-behavior: contain;
+    tab-size: 2;
+}
+
+.code .tok-tag { color: #0550ae; }
+.code .tok-attr { color: #8250df; }
+.code .tok-value { color: #0a7c42; }
+.code .tok-comment { color: var(--text-faint); font-style: italic; }
+.code .tok-doctype { color: var(--text-faint); }
+
+@media (prefers-color-scheme: dark) {
+    .code .tok-tag { color: #79c0ff; }
+    .code .tok-attr { color: #d2a8ff; }
+    .code .tok-value { color: #7ee2a8; }
+}
+
+/* Link check */
+
+.notice {
+    margin-top: 16px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--warn);
+    border-radius: var(--radius);
+    background: var(--bg-panel);
+}
+
+.notice p {
+    margin: 0 0 12px;
+    color: var(--text-soft);
+    max-width: 68ch;
+}
+
+.link-url {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    word-break: break-all;
+}
+
+.link-note {
+    margin: 2px 0 0;
+    font-size: 12px;
+    color: var(--text-faint);
+}
+
+.findings.links li {
+    padding: 9px 0;
+}
+
+/* HTML compatibility check */
+
+.html-check {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+}
+
+.ring {
+    width: 148px;
+    height: 148px;
+    flex: none;
+    /* Start the first arc at twelve o'clock rather than three. */
+    transform: rotate(-90deg);
+}
+
+.ring .track { stroke: var(--bg-sunken); }
+.ring .yes { stroke: var(--chart-ok); }
+.ring .partly { stroke: var(--chart-warn); }
+.ring .no { stroke: var(--chart-bad); }
+
+.ring text {
+    transform: rotate(90deg);
+    transform-origin: 64px 64px;
+    fill: var(--text);
+}
+
+.ring-value {
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.ring-label {
+    font-size: 10px;
+    fill: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.legend {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 12.5px;
+}
+
+.legend li {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 5px;
+}
+
+.legend .muted,
+p.muted {
+    color: var(--text-faint);
+}
+
+.swatch {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex: none;
+}
+
+.swatch.yes { background: var(--chart-ok); }
+.swatch.partly { background: var(--chart-warn); }
+.swatch.no { background: var(--chart-bad); }
+
+.findings {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.findings li {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.finding {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    margin-bottom: 5px;
+}
+
+.finding-title {
+    font-weight: 600;
+}
+
+.finding-count {
+    color: var(--text-faint);
+    font-size: 12px;
+}
+
+/* One bar per feature, split the way its clients are split. */
+.support {
+    display: flex;
+    height: 7px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--bg-sunken);
+}
+
+.support .yes { background: var(--chart-ok); }
+.support .partly { background: var(--chart-warn); }
+.support .no { background: var(--chart-bad); }
+
+p.source {
+    margin-top: 18px;
+    font-size: 12px;
+}
+
+p.source a {
+    color: var(--accent);
+}
+
+/* Spam score */
+
+.spam-score {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 0 0 10px;
+}
+
+.spam-score strong {
+    font-size: 26px;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    color: var(--ok);
+}
+
+.spam-score.is-spam strong {
+    color: var(--danger);
+}
+
+.spam-score span {
+    color: var(--text-soft);
+}
+
+table.rules {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 12.5px;
+}
+
+table.rules td {
+    padding: 5px 12px 5px 0;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+}
+
+table.rules .points {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+    color: var(--text-faint);
+}
+
+table.rules .costly .points {
+    color: var(--warn);
+    font-weight: 600;
+}
+
+table.rules .rule {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    white-space: nowrap;
+    color: var(--text-soft);
 }
 
 /* Segment meter */
@@ -672,6 +1363,7 @@ pre {
 }
 
 .docs {
+    overscroll-behavior: contain;
     overflow-y: auto;
     padding: 32px 40px 64px;
     line-height: 1.65;
@@ -812,12 +1504,50 @@ pre {
 .connection.connecting { color: var(--warn); }
 .connection.polling { color: var(--warn); }
 
+/* Only the live class pulses: a ring on a dead stream would claim a connection that is gone. */
+.connection.live::before {
+    animation: connection-pulse 1.8s ease-out infinite;
+}
+
+/* The dot fades as the ring leaves it: a ring alone is too small down here to notice. */
+@keyframes connection-pulse {
+    0% { opacity: 1; box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 55%, transparent); }
+    60% { opacity: 0.35; box-shadow: 0 0 0 7px color-mix(in srgb, currentColor 0%, transparent); }
+    100% { opacity: 1; box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 0%, transparent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .connection.live::before {
+        animation: none;
+    }
+}
+
 .empty {
     margin: 0;
     padding: 40px 24px;
     color: var(--text-faint);
     text-align: center;
     line-height: 1.7;
+}
+
+.empty-title {
+    display: block;
+    color: var(--text-soft);
+    margin-bottom: 4px;
+}
+
+.endpoints {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    margin-top: 14px;
+}
+
+.endpoint {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .empty code {
@@ -848,4 +1578,205 @@ pre {
         border-right: 0;
         border-bottom: 1px solid var(--border);
     }
+}
+
+/*
+ * The drop target is the whole window rather than a pane: a file coming out of a mail client
+ * lands wherever the cursor happens to be, and hunting for a rectangle is not an improvement.
+ */
+/* Our display beats the user agent's [hidden] rule, so the attribute needs saying again. */
+.dropzone[hidden] {
+    display: none;
+}
+
+.dropzone {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--bg) 78%, transparent);
+    backdrop-filter: blur(2px);
+}
+
+.dropzone-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 28px 40px;
+    border: 2px dashed var(--accent);
+    border-radius: 12px;
+    background: var(--bg-panel);
+    color: var(--text);
+    box-shadow: 0 12px 32px rgb(0 0 0 / 18%);
+}
+
+.dropzone-card svg {
+    width: 34px;
+    height: 34px;
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.dropzone-card span {
+    font-size: 12px;
+    color: var(--text-soft);
+    /* The note is two sentences with a break between them: what happened, and what to do. */
+    white-space: pre-line;
+}
+
+.dropzone.failed .dropzone-card {
+    border-color: var(--danger);
+}
+
+.dropzone.failed .dropzone-card svg {
+    stroke: var(--danger);
+}
+
+.dropzone.failed .dropzone-card span {
+    color: var(--danger);
+}
+
+.dropzone.failed .dropzone-card {
+    cursor: pointer;
+}
+
+/* Deliverability report */
+
+.score-head {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 4px;
+}
+
+.score {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 78px;
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    background: var(--bg-sunken);
+    line-height: 1.1;
+}
+
+.score strong {
+    font-size: 26px;
+    font-weight: 700;
+}
+
+.score span {
+    font-size: 11px;
+    color: var(--text-soft);
+}
+
+.score-ok { background: var(--ok-soft); color: var(--ok); }
+.score-warn { background: var(--warn-soft); color: var(--warn); }
+.score-bad { background: var(--danger-soft); color: var(--danger); }
+
+.score-head p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.score-caveat {
+    color: var(--text-faint);
+    font-size: 12px;
+}
+
+.findings {
+    margin: 0 0 4px;
+    padding: 0;
+    list-style: none;
+}
+
+.finding-row {
+    padding: 9px 0;
+    border-top: 1px solid var(--border);
+}
+
+.finding-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+/* A dot rather than a word: the row already says what is wrong, in the reader's own language. */
+.finding-mark {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-faint);
+}
+
+.status-pass .finding-mark { background: var(--ok); }
+.status-warn .finding-mark { background: var(--warn); }
+.status-fail .finding-mark { background: var(--danger); }
+
+.status-skip .finding-title,
+.status-skip .finding-why {
+    color: var(--text-faint);
+}
+
+.finding-penalty {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--danger);
+}
+
+.finding-why {
+    margin: 3px 0 0 16px;
+    font-size: 12px;
+    color: var(--text-soft);
+}
+
+.finding-evidence {
+    margin: 5px 0 0 16px;
+    font-size: 12px;
+}
+
+.finding-evidence summary {
+    cursor: pointer;
+    color: var(--text-soft);
+}
+
+.finding-evidence pre {
+    margin: 5px 0 0;
+    padding: 8px 10px;
+    border-radius: var(--radius);
+    background: var(--bg-sunken);
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* The one place the report reaches outside, so it says so before it does. */
+.check-prompt {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 8px;
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    background: var(--bg-sunken);
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text-soft);
+}
+
+.check-prompt button {
+    flex: none;
+    margin-left: auto;
 }

@@ -14,7 +14,9 @@ everything in a web UI.
 
 ## Non-goals
 
-- No real delivery, ever. The only outbound HTTP msgpit makes is delivery-report callbacks to the app.
+- No real delivery, ever. msgpit reaches outside in exactly three cases: delivery-report callbacks
+  to the app, the link check, and the DNS lookups behind the authentication checks. The last two
+  only run when someone presses the button.
 - No credential validation (only check that auth has the right *shape*).
 - No inbound messages, no multi-user, no auth on the UI, no persistence guarantees.
 - No full API coverage per provider: only the endpoints our apps actually use.
@@ -35,6 +37,244 @@ everything in a web UI.
   hand-rolling RFC 6455 framing would mean reimplementing a library. Polling is the fallback
   when the stream drops.
 - Base image: `php:8.3-cli-alpine` with `pdo_sqlite`. Multi-arch (amd64 + arm64).
+
+## Mail
+
+msgpit also catches SMTP, so a project has one place for everything it sends rather than a mail
+catcher beside a message catcher. It is meant to replace Mailpit in our projects, not to compete
+with it: no POP3, no link checking, no Outlook compatibility report.
+
+- `Smtp\Session` is the protocol as a state machine, with no sockets in it, so the whole dialogue
+  is testable without opening a port. `Smtp\Server` adds the sockets and selects over them; PHP
+  here has no pcntl, so connections are multiplexed rather than forked.
+- **We advertise neither STARTTLS nor AUTH.** Clients only use what the server offers, and every
+  client we care about talks plain when nothing else is on the table. This only ever listens inside
+  a development network.
+- `Mime\Parser` handles what mail clients send, not two decades of broken mail from the internet.
+  It stays small because PHP already does the hard parts: `iconv_mime_decode_headers()` for folding
+  and RFC 2047, `quoted_printable_decode()` and `base64_decode()` for transfer encodings, `iconv()`
+  for charsets. Never unfold headers yourself before decoding: the whitespace between two
+  encoded-words has to disappear rather than become a space, and that is how a subject gets mangled.
+- SMTP is **not** a provider. The `Provider` contract is HTTP routes and a listener does not fit in
+  it, so mail is core: `provider` is `smtp` and the channel is `email`. Do not invent a fake
+  provider for it.
+- One message per recipient, as everywhere else, and the **envelope** decides who those are, not
+  the To header. That is how delivery works and the only way a Bcc shows up at all.
+- MIME parts live in their own table with the content as a BLOB, and pruning takes them along:
+  attachments are the bulk of the database.
+- The listener is a second process started by `docker-entrypoint.sh`, which restarts it if it dies.
+  Both processes write the same SQLite file, hence WAL mode and a busy timeout. The healthcheck
+  checks both ports, because a container that answers HTTP while silently accepting no mail is the
+  worst of both worlds.
+- Docksal projects reach it through the network aliases `mail` and `mailpit`, so the sendmail
+  configuration that Docksal's cli image ships (`msmtp ... --host=mail --port=1025`) needs no change.
+
+### Imported .eml files
+
+A `.eml` dragged onto the UI goes to `POST /api/messages/import` and is stored like any other mail,
+so the spam score, html check and link check work on a message that was already sent elsewhere.
+
+- **An import is not a delivery, and the UI has to say so.** It is stored under the provider
+  `import` rather than `smtp`, carries `meta.imported`, and shows an "imported" tag in the list and
+  a line in the detail explaining what is different.
+- There is no envelope, because nobody delivered the file. Recipients come from `To`, `Cc` and
+  `Bcc`, the sender from `Return-Path` or `From`, and `envelopeSender`/`envelopeRecipients` stay
+  **absent** rather than being filled with those. Reporting them would claim a delivery that never
+  happened, and a Bcc that only the real envelope knew about is simply not recoverable.
+- The file goes up as raw bytes. Re-encoding it would change the very thing the checks are asked to
+  judge. The filename travels percent encoded in `X-Msgpit-Filename`, because a header carries
+  latin-1 and mail files are named in Dutch.
+- The drop target is the whole window: a file coming out of a mail client lands wherever the cursor
+  is, and hunting for a rectangle is not an improvement.
+- **`preventDefault()` on every dragover, not only on drags that announce `Files`.** A message
+  dragged out of macOS Mail is a file promise, and the drag does not always advertise a file, so
+  testing the types first means the browser opens the message in a new tab and the page is gone.
+  By the time the drop tells us what it carries, objecting is too late.
+- **A drag straight out of macOS Mail carries no message.** It puts `message:<message-id>` on the
+  drag as a `text/uri-list`: a pointer into Mail's own store, which only Mail can resolve. Reading
+  the drop more carefully will not help, so do not try again. The drop names that case
+  specifically, and the **Import .eml** button exists because of it. A drop that carries nothing
+  also prints its types and values, which is the only way to tell "this client cannot" apart from
+  "we are reading it wrong".
+
+### HTML check
+
+`Mime\HtmlCheck` scores a message's html against the caniemail data bundled at
+`data/caniemail.json` (MIT, Rémi Parmentier). It collects elements, attributes and css property
+names with `DOMDocument`, maps them to caniemail slugs (`html-table`, `css-margin`) and counts the
+verdicts per client version.
+
+- **Bundled, not fetched.** msgpit must work offline, so `bin/update-caniemail.php` refreshes the
+  file and the result is committed. Never fetch it at runtime.
+- Every feature counts once, however often it occurs: weighting by occurrence would flatter a
+  message that repeats one safe property.
+- An "unknown" verdict counts for neither side.
+- Worked out per request rather than stored, because the data is refreshed now and then and a
+  score from six months ago would be quietly wrong.
+- Tests run against a small invented dataset in `tests/fixtures/caniemail/`, so they do not move
+  when caniemail publishes new measurements. One test reads the bundled file to prove its shape.
+
+### Headers
+
+The detail response carries **every** header, read back from the stored message rather than from
+the handful kept in `meta`. That is deliberate: nothing has to be duplicated at capture time, and
+a message stored before we cared about some header still shows it. `Mime\Parser::headers()` does
+the folding and the decoding.
+
+Mail analysis lives here, so do not trim the list: a missing `Date`, a `Return-Path` that
+disagrees with `From`, an `Auto-Submitted` that stops an auto-responder. A `Bcc` is visible here
+and nowhere else.
+
+### The preview iframe
+
+The html as the recipient sees it, in a sandboxed iframe: no scripts, no forms, its own origin.
+
+A stylesheet of our own goes in ahead of the message, setting a system font stack and a base size.
+Without it the browser falls back to Times, which no mail client does: every one of them applies a
+default of its own, so Times is the one thing the message will certainly not look like anywhere.
+It is a starting point, not an override; anything the message says about type wins.
+
+### The html source view
+
+`public/ui/htmlsource.js` indents and colours the html of a message. A tokenizer, not a syntax
+highlighting library: it is one language, and Shiki would bring a bundler, a WASM regex engine and
+a grammar bundle to a project that has no build step and has to work offline.
+
+- Indentation is the larger half of the job. Mail html arrives as one line.
+- Block elements get their own line and open a level; inline elements stay in the text, because
+  breaking those apart changes how a sentence reads.
+- Build the coloured tag from its parts, never by chaining replaces over the escaped string: the
+  second pass then matches the class attribute of the span the first pass inserted.
+- Everything is escaped, text included. This is the source of a captured message, not markup we
+  trust.
+
+### The source tab
+
+One tab, two views: the message as it arrived and the html the sender wrote. They were separate
+tabs, which asked the reader to know in advance which of the two held the line they were after.
+The switch that picks the view sits next to the one that changes how it is drawn, and the second
+is deliberately quieter than the first.
+
+Tab order runs from what the message is to what is wrong with it: Preview, Source, Headers, then
+the verdicts with Deliverability first, since it draws on the three behind it.
+
+### The raw view
+
+`public/ui/rawmessage.js` lays a captured message out by structure: headers apart from bodies,
+boundaries marked, base64 folded behind its size.
+
+Deliberately not a syntax highlighter. The problem with a raw message is not syntax but shape: one
+attachment means a single base64 line of fifteen thousand characters, and no colouring fixes that.
+Folding it does. A highlighter like Shiki would also mean a build step and a bundled grammar,
+which this project does not have and does not want.
+
+### Deliverability report
+
+`Mail\Report` scores a captured message out of ten: one `Check` class per question, each returning
+a `Finding` with a status, a penalty and the evidence behind it. Adding a check means one class and
+one line in `Report::CHECKS`.
+
+- **A check that cannot apply is skipped, not failed, and skipped findings are left out of the sum.**
+  A mail we caught ourselves never travelled: no sending server, no SPF result, no signature. Marking
+  every test message down for that would turn the number into noise. The UI says how many were
+  skipped and why.
+- **Authentication is read, not recomputed.** An imported `.eml` carries `Authentication-Results` and
+  `Received-SPF` from the server that really received it. That server had the sending IP and the key
+  as it was at the time; we have a file that a mail client re-encoded and a selector that may since
+  have rotated. Verifying again here fails messages that were accepted, which is worse than useless.
+- The evidence is the product, not the score. "No List-Unsubscribe" is an opinion; the headers we did
+  read are a fact, and only the second one tells you where to look. Every finding carries its own.
+- **Never present it as a prediction.** Real filters weigh reputation and sending history that
+  nothing local can see. Same caution as the spam score, for the same reason.
+- Worked out per request like the html check, never stored: it leans on the spam score and on the
+  caniemail data, and both move underneath it.
+
+### DKIM verification
+
+`Mail\Dkim` verifies a signature itself: canonicalisation, body hash and `openssl_verify` against
+the key from DNS. Written rather than pulled in, because the runtime may not require `vendor/`, and
+with explicit permission: this is the exception to "do not reimplement a package", not a precedent.
+
+- **It is the fallback, not the answer.** When a message carries `Authentication-Results`, that is
+  what the report shows. Our own verification is for a signature with no verdict attached: a `.eml`
+  out of a Sent folder, or mail caught on the way out. It answers "does my sending setup sign
+  correctly", not "was this message accepted".
+- **The body hash is checked first and gets its own reason.** It is the failure that actually
+  happens: a mail client re-encodes on export, one byte moves, and the hash is gone. Reporting that
+  as a bad signature would send someone hunting for a key problem that is not there.
+- Supports `rsa-sha256` with all four canonicalisation combinations. Everything else, `ed25519`
+  included, reports `unsupported` with the reason. Half an implementation that guesses is worse than
+  one that says what it cannot do.
+- `x=` in the past fails. A `t=` in the future and a key in test mode are notes, not verdicts:
+  neither makes a signature invalid.
+- The verifier does no DNS of its own; it takes a `KeyLookup`. That keeps the crypto testable
+  without a network and the resolver replaceable.
+
+### DNS
+
+`Core\Dns` is the only place msgpit asks the network something that is not an http request, and it
+exists because SPF, DMARC and DKIM cannot be judged without it: the answer lives in the sender's
+zone and nowhere else.
+
+- **Runs when the Deliverability tab is opened, never when a message is.** A resolver that is slow or
+  gone would otherwise make reading your own post slow or gone, and most of the time nobody is
+  asking the question. The detail response is built without DNS; the tab fetches the full report
+  again with it, once per message.
+- `MSGPIT_DNS=off` switches it off; the checks then report as not applicable, which is a supported
+  way to work and not a failure.
+- Answers are cached with the TTL of the record, in the generic `cache` table. It outlives the
+  request on purpose: twenty messages from one domain then cost one lookup between them.
+- **The names come out of a captured message, so a sender chooses them.** Anything that walks a
+  chain of them has to cap how far it follows; SPF's ten-lookup limit is that cap, and it is a
+  safety measure rather than a detail of the spec.
+- `dns_get_record()` cannot be pointed at a specific nameserver, whatever it looks like: `$authns`
+  is an output. Aiming at an authoritative server would mean writing a resolver over UDP, and
+  measured lookups run at 17 to 56 ms through the container's resolver, so the win is in the cache.
+- **A blocklist answer is never just yes.** The meaning is in the last octet and it differs per
+  list: the code that means "spam source" on one means "known good" on another, and Spamhaus's
+  policy range only says an address should not be sending mail directly, which is true of every
+  home connection. Read the code against the list that gave it, or the report accuses people of
+  things they did not do.
+- Lists answer in `127.255.255.0/24` to refuse a query, which is what they do for anything arriving
+  through a public resolver. Reading that as a listing is exactly backwards; when every list refuses,
+  say the resolver is the problem.
+- DMARC needs the organisational domain. RFC 7489 says to find it with the public suffix list; we
+  walk up a label at a time and stop while two are left. Same record for every real zone, a lookup
+  or two more, and no 200 kB list to keep fresh. The case it gets wrong is a public suffix that
+  publishes DMARC of its own, and none do.
+
+### Link check
+
+`Mime\Links` finds the unique urls in a message (anchors, images, css `url()`, and bare urls in the
+body text); `Core\LinkChecker` fetches them.
+
+- **Never automatic.** This is the only thing msgpit does that leaves the development network, and
+  it runs only when the user presses the button. Links in mail carry one-shot tokens: fetching a
+  password reset or an unsubscribe link can spend it, and a tracking pixel counts the fetch as a
+  read. The UI says so before the button, and that warning stays.
+- HEAD first, GET when the server refuses it. Redirects are reported, not followed: a redirect
+  chain is what you want to see, and not following it also means no second host to validate.
+- **Link-local addresses are refused, and the decision is made on the resolved address.** That is
+  where cloud metadata services live, and they hand out credentials to whatever asks. A hostname
+  denylist does not do it: a name that resolves to 169.254.169.254 is the whole trick, and so is a
+  trailing dot. The rest of the private network stays reachable on purpose, because checking that
+  a template built the right url for `http://web` is one of the reasons this exists. Only http and
+  https are fetched.
+- Results are not stored. They are about the world right now, not about the message.
+
+### Spam scoring
+
+`MSGPIT_SPAMASSASSIN` (`host:port`) points at a spamd, the same spelling Mailpit uses. The protocol
+is a REPORT request and a reply with the score and the rules; nothing is installed in our image.
+
+- **Best effort, always.** A daemon that is down, slow or absent means no score, never a failed
+  capture. A catcher that drops mail because a side service is unhappy is worse than one that shows
+  no number.
+- The rule table is the point, not the score: it names which line of a template is costing points.
+  A wrapped description belongs to the rule above it, which is the one parsing subtlety here.
+- A score computed in isolation has no `Received` headers, no SPF or DKIM and no reputation, so it
+  says something about content and nothing about what a real filter would decide. Do not present
+  it as a prediction.
 
 ## Architecture
 
@@ -155,11 +395,14 @@ Providers are pure translators: parse request, validate required fields and auth
 | `GET /api/messages?provider=&channel=&to=&since=` | List messages (newest first) |
 | `GET /api/messages/{id}` | Message detail incl. raw request and DLR history |
 | `DELETE /api/messages` | Clear all |
+| `POST /api/messages/import` | Import a raw `.eml` (body is the file) |
+| `POST /api/messages/{id}/authentication` | Rebuild the report with the DNS checks. Asks DNS |
 | `POST /api/messages/{id}/read` | Mark one message read |
 | `POST /api/messages/read` | Mark everything read |
 | `POST /api/messages/{id}/dlr` | `{"status":"delivered"}` send delivery report |
 | `POST /api/scenario` | `{"scenario":"ServerError"}` one-shot failure for next provider request |
 | `GET /api/providers` | Enabled providers and their capabilities |
+| `POST /api/messages/{id}/links` | Check the links in a message. Reaches the internet |
 | `GET /api/scenarios` | Scenario catalogue with the magic numbers, read from the code |
 | `GET /api/docs` and `GET /api/docs/{slug}` | Reference pages from `docs/` as Markdown |
 | `GET /api/stream` | SSE stream of new messages and status changes |
@@ -178,6 +421,7 @@ was sent, then clear).
 | `MSGPIT_<PROVIDER>_DLR_URL` | - | Callback URL for delivery reports, e.g. `http://web/sms-status.php` |
 | `MSGPIT_<PROVIDER>_DLR_HEADER` | - | Header name authenticating that callback |
 | `MSGPIT_<PROVIDER>_DLR_SECRET` | - | Its value. Both or neither |
+| `MSGPIT_DNS` | on | `off` disables every DNS lookup, for working offline |
 
 ## Adding a provider (checklist)
 
@@ -288,7 +532,8 @@ framework and a half-finished clone of one.
 
 - Add runtime Composer dependencies or a framework.
 - Reference concrete providers from core.
-- Validate credential values or make any outbound call other than delivery-report callbacks.
+- Validate credential values, or make an outbound call other than a delivery-report callback or a
+  link check the user asked for.
 - Log or display secrets unmasked (mask `Authorization`, API keys and tokens in stored raw requests).
 - Reimplement a third-party library ourselves to avoid adding it. Ask first.
 

@@ -44,6 +44,14 @@ answered.
 Your integration tests get an assertion target. Send, then ask msgpit whether the message exists
 and what was in it. See [HTTP API](#docs/06-api).
 
+## Mail too
+
+The same reasoning applies to email, and for a long time the answer was Mailpit. It still is a
+fine tool, but running one catcher for mail and another for messages means two places to look,
+two APIs to assert against, and two things to explain to a new colleague. msgpit listens on SMTP
+as well, so there is one inbox for everything an application sends. See
+[Email](#docs/07-email).
+
 ## Design decisions
 
 **Nothing is ever delivered.** The only outbound HTTP request msgpit makes is the delivery-report

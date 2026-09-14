@@ -12,18 +12,7 @@ use Msgpit\Core\Storage;
 use Msgpit\Http\Request;
 use Msgpit\Http\Response;
 
-/** Registers its own PSR-4 autoloader: the runtime never needs vendor/. */
-spl_autoload_register(static function (string $class): void {
-    if (!str_starts_with($class, 'Msgpit\\')) {
-        return;
-    }
-
-    $file = dirname(__DIR__) . '/src/' . str_replace('\\', '/', substr($class, 7)) . '.php';
-
-    if (is_file($file)) {
-        require $file;
-    }
-});
+require dirname(__DIR__) . '/bootstrap.php';
 
 $root = dirname(__DIR__);
 $request = Request::fromGlobals();
