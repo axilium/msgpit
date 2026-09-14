@@ -2,6 +2,29 @@ import {renderMarkdown} from '/ui/markdown.js';
 import {renderRawMessage} from '/ui/rawmessage.js';
 
 const FALLBACK_POLL_MS = 2000;
+
+/**
+ * The url says what you are looking at, so a refresh lands you back there: which message, which
+ * tab, or which reference page. A bare tab name is still understood, since that is what the
+ * earlier links looked like.
+ *
+ * @return {{message: ?string, tab: ?string, doc: ?string}}
+ */
+function readHash() {
+    const hash = decodeURIComponent(location.hash.slice(1));
+
+    if (hash.startsWith('docs/')) {
+        return {message: null, tab: null, doc: hash.slice('docs/'.length)};
+    }
+
+    if (hash.startsWith('m/')) {
+        const [id, tab] = hash.slice(2).split('/');
+
+        return {message: id || null, tab: tab || null, doc: null};
+    }
+
+    return {message: null, tab: /^[a-z]+$/.test(hash) ? hash : null, doc: null};
+}
 const SEGMENT_LIMITS = {'GSM-7': {single: 160, concatenated: 153}, 'UCS-2': {single: 70, concatenated: 67}};
 
 const el = {
@@ -27,16 +50,23 @@ const el = {
     version: document.getElementById('version'),
 };
 
+/**
+ * Where the url pointed when the page loaded. Read once: from here on the app writes the url, so
+ * reading it again would only return what we just put there.
+ */
+const opened = readHash();
+
 const state = {
     messages: [],
     selectedId: null,
     // Any tab name is accepted here; renderDetail falls back when the message has no such tab,
     // so this list cannot fall behind the tabs themselves.
-    tab: /^[a-z]+$/.test(location.hash.slice(1)) ? location.hash.slice(1) : 'message',
+    tab: opened.tab ?? 'message',
     filter: {provider: '', channel: ''},
     search: '',
     signature: '',
-    touched: false,
+    // A url that names a message counts as a choice, so refresh() will not auto-open the newest.
+    touched: opened.message !== null || opened.doc !== null,
     doc: null,
     mailBody: 'html',
     rawView: 'structured',
@@ -680,7 +710,7 @@ const renderDetail = (message) => {
     el.detail.querySelectorAll('[data-tab]').forEach((button) => {
         button.addEventListener('click', () => {
             state.tab = button.dataset.tab;
-            history.replaceState(null, '', `#${state.tab}`);
+            writeHash();
             renderDetail(message);
         });
     });
@@ -764,7 +794,19 @@ const keepTabsUsable = () => {
 
 const clearDetail = () => {
     state.selectedId = null;
+    writeHash();
     el.detail.innerHTML = '<p class="empty">Select a message to inspect it.</p>';
+};
+
+/** Reflects the current selection in the url without adding a history entry per click. */
+const writeHash = () => {
+    if (state.doc !== null) {
+        history.replaceState(null, '', `#docs/${state.doc}`);
+
+        return;
+    }
+
+    history.replaceState(null, '', state.selectedId === null ? ' ' : `#m/${state.selectedId}/${state.tab}`);
 };
 
 const openMessage = async (id) => {
@@ -785,6 +827,8 @@ const openMessage = async (id) => {
     el.messages.querySelectorAll('li').forEach((item) => {
         item.setAttribute('aria-selected', String(item.dataset.id === id));
     });
+
+    writeHash();
 };
 
 const refresh = async () => {
@@ -885,7 +929,7 @@ const openDoc = async (slug) => {
         button.setAttribute('aria-current', String(button.dataset.doc === slug));
     });
 
-    history.replaceState(null, '', `#docs/${slug}`);
+    writeHash();
 };
 
 const closeDocs = () => {
@@ -893,6 +937,7 @@ const closeDocs = () => {
     el.workspace.classList.remove('reading');
     el.docs.hidden = true;
     el.navDocs.querySelectorAll('button').forEach((button) => button.setAttribute('aria-current', 'false'));
+    writeHash();
 };
 
 const loadDocs = async () => {
@@ -1173,9 +1218,18 @@ await refresh();
 await loadDocs();
 notifications.render();
 
-// Deep link straight into a reference page.
-if (location.hash.startsWith('#docs/')) {
-    await openDoc(location.hash.slice('#docs/'.length));
+// Land back on whatever the url pointed at: a reference page, or a message and its tab.
+if (opened.doc !== null) {
+    await openDoc(opened.doc);
+} else if (opened.message !== null) {
+    if (state.messages.some((message) => message.id === opened.message)) {
+        await openMessage(opened.message);
+    } else {
+        // Cleared or pruned. Say so rather than quietly showing a different message, and keep
+        // "touched" set so the next refresh does not open one either.
+        el.detail.innerHTML = '<p class="empty">That message is no longer here.<br>Pick another from the list.</p>';
+        state.selectedId = null;
+    }
 }
 
 // Opened after load: a stream started during page load keeps the tab spinner running forever.
