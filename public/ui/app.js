@@ -42,6 +42,7 @@ const state = {
     rawView: 'structured',
     linkResults: {},
     checkingLinks: false,
+    endpoints: {providers: [], smtp: null},
     scenarios: [],
     unread: 0,
     dlrProviders: [],
@@ -228,10 +229,41 @@ const renderStats = () => {
     el.statRecipients.textContent = plural(recipients, 'recipient');
 };
 
+/**
+ * What to point an application at, taken from the running instance rather than written down here:
+ * every enabled provider with its own base url, plus smtp when it is listening.
+ */
+const renderEmptyState = () => {
+    const rows = state.endpoints.providers
+        .map((provider) => [provider.id, provider.baseUrl])
+        .concat(state.endpoints.smtp
+            ? [['email', `smtp://${state.endpoints.smtp.host}:${state.endpoints.smtp.port}`]]
+            : []);
+
+    el.empty.innerHTML = rows.length === 0
+        ? 'Nothing captured yet.'
+        : `
+            <span class="empty-title">Nothing captured yet.</span>
+            <span>Point your application at one of these and send something.</span>
+            <span class="endpoints">
+                ${rows.map(([label, url]) => `
+                    <span class="endpoint">
+                        <span class="tag">${escapeHtml(label)}</span>
+                        <code>${escapeHtml(url)}</code>
+                    </span>
+                `).join('')}
+            </span>
+        `;
+};
+
 const renderList = () => {
     const messages = visibleMessages();
 
     el.empty.hidden = messages.length > 0;
+
+    if (messages.length === 0) {
+        renderEmptyState();
+    }
 
     el.messages.innerHTML = messages.map((message) => `
         <li data-id="${escapeHtml(message.id)}" aria-selected="${message.id === state.selectedId}"
@@ -746,8 +778,9 @@ const refresh = async () => {
 };
 
 const loadProviders = async () => {
-    const {providers, version} = await api('/providers');
+    const {providers, smtp, version} = await api('/providers');
 
+    state.endpoints = {providers, smtp};
     state.dlrProviders = providers.filter((provider) => provider.deliveryReports).map((provider) => provider.id);
 
     // Only a real release gets the v prefix; "dev" and "dev-<sha>" stand on their own.

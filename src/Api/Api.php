@@ -231,14 +231,25 @@ final readonly class Api
 
     private function providers(): Response
     {
+        $host = gethostname() ?: 'msgpit';
         $providers = array_map(static fn ($provider): array => [
             'id' => $provider->id(),
             'channels' => array_map(static fn ($channel): string => $channel->value, $provider->channels()),
             'deliveryReports' => $provider instanceof SupportsDeliveryReports,
             'errorScenarios' => $provider instanceof SupportsErrorScenarios,
+            // What an application should use as its base url, so the UI never has to hardcode it.
+            'baseUrl' => "http://{$host}:8080" . ProviderRegistry::baseUrl($provider),
         ], $this->registry->all());
 
-        return Response::json(['providers' => $providers, 'version' => $this->version]);
+        $smtp = getenv('MSGPIT_SMTP') === '0'
+            ? null
+            : ['host' => $host, 'port' => (int) (getenv('MSGPIT_SMTP_PORT') ?: 1025)];
+
+        return Response::json([
+            'providers' => $providers,
+            'smtp' => $smtp,
+            'version' => $this->version,
+        ]);
     }
 
     /** The catalogue the reference docs render, so the magic numbers are never copied by hand. */
