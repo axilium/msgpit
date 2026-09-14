@@ -7,6 +7,7 @@ namespace Msgpit\Api;
 use Msgpit\Core\DeliveryStatus;
 use Msgpit\Core\Docs;
 use Msgpit\Core\DlrDispatcher;
+use Msgpit\Core\LinkChecker;
 use Msgpit\Core\Message;
 use Msgpit\Core\ProviderRegistry;
 use Msgpit\Core\Scenario;
@@ -15,6 +16,7 @@ use Msgpit\Core\SupportsDeliveryReports;
 use Msgpit\Core\SupportsErrorScenarios;
 use Msgpit\Http\Request;
 use Msgpit\Mime\HtmlCheck;
+use Msgpit\Mime\Links;
 use Msgpit\Http\Response;
 
 /** The /api routes: the UI talks to these, and so do integration tests in consuming projects. */
@@ -26,6 +28,7 @@ final readonly class Api
         private DlrDispatcher $dispatcher,
         private Docs $docs,
         private string $version = 'dev',
+        private LinkChecker $linkChecker = new LinkChecker(),
     ) {}
 
     public function handle(Request $request): ?Response
@@ -60,6 +63,10 @@ final readonly class Api
 
         if (preg_match('#^/messages/([^/]+)/dlr$#', $path, $matches) === 1 && $request->method === 'POST') {
             return $this->sendDeliveryReport($matches[1], $request);
+        }
+
+        if (preg_match('#^/messages/([^/]+)/links$#', $path, $matches) === 1 && $request->method === 'POST') {
+            return $this->checkLinks($matches[1]);
         }
 
         if (preg_match('#^/messages/([^/]+)/parts/([^/]+)$#', $path, $matches) === 1 && $request->method === 'GET') {
@@ -112,9 +119,30 @@ final readonly class Api
             if ($detail['html'] !== null) {
                 $detail['htmlCheck'] = HtmlCheck::analyse($detail['html'])?->toArray();
             }
+
+            // Listed here, but never fetched: see the link check endpoint.
+            $detail['links'] = Links::find($detail['html'], $detail['text']);
         }
 
         return Response::json($detail);
+    }
+
+    /**
+     * Reaches outside the development network, so it happens only when asked. Links in mail carry
+     * one-shot tokens: fetching a reset or unsubscribe link can spend it.
+     */
+    private function checkLinks(string $id): Response
+    {
+        $message = $this->storage->find($id);
+
+        if ($message === null) {
+            return Response::json(['error' => 'Message not found.'], 404);
+        }
+
+        $parts = $this->storage->parts($id);
+        $links = Links::find($this->body($id, $parts, 'text/html'), $this->body($id, $parts, 'text/plain'));
+
+        return Response::json(['links' => $this->linkChecker->check($links)]);
     }
 
     /**

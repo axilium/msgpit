@@ -90,6 +90,25 @@ and is bundled in the image rather than fetched at runtime. msgpit has to work o
 score that silently disappears when the network is down would be worse than one that is a few
 weeks old. Refresh it with `php bin/update-caniemail.php` and commit the result.
 
+## Link check
+
+The **Links** tab lists every url in the message: the ones a reader can click, the images and
+stylesheets a client fetches by itself, and bare urls in the body text that most clients turn into
+links anyway.
+
+Pressing the button fetches them and shows what came back.
+
+**This is the only thing msgpit does that leaves your machine**, and it is deliberately behind a
+button. Links in mail often carry a one-shot token: fetching a password reset or an unsubscribe
+link can spend it, and a tracking pixel counts the fetch as somebody having read the message. So
+it never happens on capture, and never when you simply open a message.
+
+Links inside your own Docker network work too, which makes this useful for the thing that actually
+breaks: a mail template that built an url from the wrong host.
+
+Redirects are reported rather than followed, so you see the chain instead of only its end. Results
+are not stored, because they say something about the world right now and not about the message.
+
 ## Spam scoring
 
 Point msgpit at a SpamAssassin daemon and every captured mail gets a score, with the rules that

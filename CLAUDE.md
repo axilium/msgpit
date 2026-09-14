@@ -14,7 +14,8 @@ everything in a web UI.
 
 ## Non-goals
 
-- No real delivery, ever. The only outbound HTTP msgpit makes is delivery-report callbacks to the app.
+- No real delivery, ever. msgpit makes outbound HTTP in exactly two cases: delivery-report
+  callbacks to the app, and the link check, which only runs when someone presses the button.
 - No credential validation (only check that auth has the right *shape*).
 - No inbound messages, no multi-user, no auth on the UI, no persistence guarantees.
 - No full API coverage per provider: only the endpoints our apps actually use.
@@ -83,6 +84,19 @@ verdicts per client version.
   score from six months ago would be quietly wrong.
 - Tests run against a small invented dataset in `tests/fixtures/caniemail/`, so they do not move
   when caniemail publishes new measurements. One test reads the bundled file to prove its shape.
+
+### Link check
+
+`Mime\Links` finds the unique urls in a message (anchors, images, css `url()`, and bare urls in the
+body text); `Core\LinkChecker` fetches them.
+
+- **Never automatic.** This is the only thing msgpit does that leaves the development network, and
+  it runs only when the user presses the button. Links in mail carry one-shot tokens: fetching a
+  password reset or an unsubscribe link can spend it, and a tracking pixel counts the fetch as a
+  read. The UI says so before the button, and that warning stays.
+- HEAD first, GET when the server refuses it. Redirects are reported, not followed: a redirect
+  chain is what you want to see.
+- Results are not stored. They are about the world right now, not about the message.
 
 ### Spam scoring
 
@@ -222,6 +236,7 @@ Providers are pure translators: parse request, validate required fields and auth
 | `POST /api/messages/{id}/dlr` | `{"status":"delivered"}` send delivery report |
 | `POST /api/scenario` | `{"scenario":"ServerError"}` one-shot failure for next provider request |
 | `GET /api/providers` | Enabled providers and their capabilities |
+| `POST /api/messages/{id}/links` | Check the links in a message. Reaches the internet |
 | `GET /api/scenarios` | Scenario catalogue with the magic numbers, read from the code |
 | `GET /api/docs` and `GET /api/docs/{slug}` | Reference pages from `docs/` as Markdown |
 | `GET /api/stream` | SSE stream of new messages and status changes |
@@ -350,7 +365,8 @@ framework and a half-finished clone of one.
 
 - Add runtime Composer dependencies or a framework.
 - Reference concrete providers from core.
-- Validate credential values or make any outbound call other than delivery-report callbacks.
+- Validate credential values, or make an outbound call other than a delivery-report callback or a
+  link check the user asked for.
 - Log or display secrets unmasked (mask `Authorization`, API keys and tokens in stored raw requests).
 - Reimplement a third-party library ourselves to avoid adding it. Ask first.
 

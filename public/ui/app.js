@@ -38,6 +38,8 @@ const state = {
     touched: false,
     doc: null,
     mailBody: 'html',
+    linkResults: {},
+    checkingLinks: false,
     scenarios: [],
     unread: 0,
     dlrProviders: [],
@@ -322,6 +324,64 @@ const mailPanels = {
         `;
     },
 
+    links: (message) => {
+        const results = state.linkResults[message.id];
+
+        if (!results) {
+            return `
+                <h3>${plural(message.links.length, 'link')} in this message</h3>
+                <ul class="findings">
+                    ${message.links.map((link) => `
+                        <li>
+                            <div class="finding">
+                                <span class="tag">${escapeHtml(link.kind)}</span>
+                                <span class="link-url">${escapeHtml(link.url)}</span>
+                            </div>
+                        </li>
+                    `).join('')}
+                </ul>
+                <div class="notice">
+                    <p><strong>Checking these fetches them for real.</strong> It is the only thing
+                    msgpit does that leaves your machine. Links in mail often carry a one-shot
+                    token, so fetching a password reset or an unsubscribe link can spend it, and a
+                    tracking pixel will count the fetch as somebody reading the message.</p>
+                    <button type="button" class="primary" id="check-links" ${state.checkingLinks ? 'disabled' : ''}>
+                        ${state.checkingLinks ? 'Checking...' : 'Check these links'}
+                    </button>
+                </div>
+            `;
+        }
+
+        const row = (link) => {
+            const failed = link.status === null || link.status >= 400;
+            const redirected = link.status !== null && link.status >= 300 && link.status < 400;
+
+            return `
+                <li>
+                    <div class="finding">
+                        <span class="tag ${failed ? 'status-failed' : (redirected ? '' : 'status-delivered')}">
+                            ${link.status ?? 'failed'}
+                        </span>
+                        <span class="tag">${escapeHtml(link.kind)}</span>
+                        <span class="link-url">${escapeHtml(link.url)}</span>
+                    </div>
+                    ${link.redirect ? `<p class="link-note">redirects to ${escapeHtml(link.redirect)}</p>` : ''}
+                    ${link.reason ? `<p class="link-note">${escapeHtml(link.reason)}</p>` : ''}
+                </li>
+            `;
+        };
+
+        const broken = results.filter((link) => link.status === null || link.status >= 400);
+
+        return `
+            <h3>${broken.length === 0 ? 'Every link answered' : `${plural(broken.length, 'link')} did not answer`}</h3>
+            <ul class="findings links">${results.map(row).join('')}</ul>
+            <p class="muted source">
+                <button type="button" class="ghost" id="check-links">Check again</button>
+            </p>
+        `;
+    },
+
     /** A ring showing how the three verdicts divide the tested clients. */
     html: (message) => {
         const check = message.htmlCheck;
@@ -487,6 +547,9 @@ const panels = {
 /** Delivery only makes sense for providers that can call the app back, so e-mail never gets the tab. */
 const isMail = (message) => message.channel === 'email';
 
+/** Green when it is fine, amber when it is worth a look, red when it is not. */
+const verdict = (good, acceptable) => (good ? 'ok' : (acceptable ? 'warn' : 'bad'));
+
 const tabsFor = (message) => {
     const tabs = [
         ['message', isMail(message) ? 'Preview' : 'Message', null],
@@ -500,12 +563,34 @@ const tabsFor = (message) => {
             tabs.push(['attachments', 'Attachments', attachments.length]);
         }
 
+        if ((message.links ?? []).length > 0) {
+            const checked = state.linkResults[message.id];
+            const broken = checked?.filter((link) => link.status === null || link.status >= 400).length;
+
+            tabs.push([
+                'links',
+                'Links',
+                checked ? `${broken}/${checked.length}` : message.links.length,
+                checked ? verdict(broken === 0, broken === 0) : null,
+            ]);
+        }
+
         if (message.htmlCheck) {
-            tabs.push(['html', 'HTML check', `${Math.round(message.htmlCheck.supported)}%`]);
+            const supported = message.htmlCheck.supported;
+
+            tabs.push(['html', 'HTML check', `${Math.round(supported)}%`, verdict(supported >= 90, supported >= 70)]);
         }
 
         if (message.meta.spam) {
-            tabs.push(['spam', 'Spam', message.meta.spam.score.toFixed(1)]);
+            const spam = message.meta.spam;
+
+            // Half the threshold still leaves room; above it a real filter would act.
+            tabs.push([
+                'spam',
+                'Spam',
+                spam.score.toFixed(1),
+                verdict(!spam.spam && spam.score < spam.threshold / 2, !spam.spam),
+            ]);
         }
     }
 
@@ -539,9 +624,9 @@ const renderDetail = (message) => {
             </p>
         </div>
         <div class="tabs" role="tablist">
-            ${tabs.map(([id, label, count]) => `
+            ${tabs.map(([id, label, count, tone]) => `
                 <button type="button" role="tab" data-tab="${id}" aria-selected="${state.tab === id}">
-                    ${label}${count ? `<span class="count">${count}</span>` : ''}
+                    ${label}${count ? `<span class="count${tone ? ` ${tone}` : ''}">${count}</span>` : ''}
                 </button>
             `).join('')}
         </div>
@@ -554,6 +639,19 @@ const renderDetail = (message) => {
             history.replaceState(null, '', `#${state.tab}`);
             renderDetail(message);
         });
+    });
+
+    el.detail.querySelector('#check-links')?.addEventListener('click', async () => {
+        state.checkingLinks = true;
+        renderDetail(message);
+
+        try {
+            const {links} = await api(`/messages/${message.id}/links`, {method: 'POST'});
+            state.linkResults = {...state.linkResults, [message.id]: links};
+        } finally {
+            state.checkingLinks = false;
+            renderDetail(message);
+        }
     });
 
     el.detail.querySelectorAll('[data-body]').forEach((button) => {

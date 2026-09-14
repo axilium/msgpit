@@ -19,8 +19,8 @@ a realistic provider response comes back, and everything shows up in a web UI.
 - **Email too.** msgpit speaks SMTP on 1025, so a project has one inbox for everything it sends
   rather than a mail catcher beside a message catcher. Html is previewed as the recipient sees it,
   inline images and all, with attachments to download.
-- Html is checked against what email clients actually support, and scored with SpamAssassin when
-  you point msgpit at one.
+- Html is checked against what email clients actually support, links are checked on request, and
+  mail is scored with SpamAssassin when you point msgpit at one.
 - New messages appear instantly over SSE, no refresh. The unread count is in the tab title, and
   over https a desktop notification can announce one while you are working elsewhere.
 
