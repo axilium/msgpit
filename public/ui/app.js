@@ -213,16 +213,24 @@ const visibleMessages = () => state.messages.filter((message) => {
 });
 
 const renderSidebar = () => {
-    const countBy = (key) => state.messages.reduce((totals, message) => (
-        {...totals, [message[key]]: (totals[message[key]] ?? 0) + 1}
-    ), {});
+    const countBy = (key) => state.messages.reduce((totals, message) => {
+        const tally = totals[message[key]] ?? {total: 0, unread: 0};
 
-    const item = (label, count, type, value) => `
+        return {
+            ...totals,
+            [message[key]]: {total: tally.total + 1, unread: tally.unread + (message.read ? 0 : 1)},
+        };
+    }, {});
+
+    const item = (label, tally, type, value) => `
         <li>
             <button type="button" data-filter="${type}" data-value="${escapeHtml(value)}"
                     aria-current="${state.filter[type] === value}">
                 <span>${escapeHtml(label)}</span>
-                <span class="count">${count}</span>
+                <span class="count">
+                    ${tally.unread > 0 ? `<span class="unread-count">${tally.unread}</span>` : ''}
+                    ${tally.total}
+                </span>
             </button>
         </li>
     `;
@@ -244,11 +252,11 @@ const renderSidebar = () => {
     const channels = countBy('channel');
 
     el.navProviders.innerHTML = Object.entries(providers)
-        .map(([name, count]) => item(name, count, 'provider', name))
+        .map(([name, tally]) => item(name, tally, 'provider', name))
         .join('') || '<li><button type="button" disabled><span>None yet</span></button></li>';
 
     el.navChannels.innerHTML = Object.entries(channels)
-        .map(([name, count]) => item(name, count, 'channel', name))
+        .map(([name, tally]) => item(name, tally, 'channel', name))
         .join('') || '<li><button type="button" disabled><span>None yet</span></button></li>';
 };
 

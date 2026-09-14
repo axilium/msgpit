@@ -20,13 +20,15 @@
     --warn: #8a4209;
     --warn-soft: #fce7b5;
 
-    /* The top bar is dark in both themes, so the workspace reads as the lighter surface. */
-    --topbar-bg: #14181e;
+    /* The top bar is dark in both themes, so the workspace reads as the lighter surface.
+       Dark grey-blue rather than near-black: heavy enough to read as a bar, not as ink. */
+    --topbar-bg: #242c37;
     --topbar-text: #f2f5f8;
-    --topbar-soft: #97a2af;
-    --topbar-border: #2c333c;
-    --topbar-control: #1f252d;
-    --topbar-control-hover: #2a323b;
+    --topbar-soft: #c2cbd7;
+    --topbar-border: #3a4553;
+    --topbar-control: #465364;
+    --topbar-control-hover: #515f72;
+    --topbar-control-border: #7d8c9f;
 
     --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
     --radius: 7px;
@@ -34,10 +36,12 @@
 
 @media (prefers-color-scheme: dark) {
     :root {
-        --topbar-bg: #0a0d11;
-        --topbar-border: #232a33;
-        --topbar-control: #171c23;
-        --topbar-control-hover: #212831;
+        --topbar-bg: #171e27;
+        --topbar-soft: #a9b5c4;
+        --topbar-border: #2b3542;
+        --topbar-control: #333f4e;
+        --topbar-control-hover: #3c4959;
+        --topbar-control-border: #64717f;
 
         --bg: #0c0f13;
         --bg-panel: #161a20;
@@ -103,8 +107,15 @@ body {
     color: var(--topbar-text);
 }
 
+/* The two fields you type or pick in have to read as fields against the bar, not as bar. */
+.topbar input,
+.topbar select {
+    border-color: var(--topbar-control-border);
+}
+
 .topbar input::placeholder {
     color: var(--topbar-soft);
+    opacity: 1;
 }
 
 .topbar input:hover,
@@ -118,6 +129,14 @@ body {
 .topbar select:focus-visible,
 .topbar button:focus-visible {
     outline-color: var(--accent);
+}
+
+.topbar input:focus,
+.topbar select:focus {
+    background: var(--topbar-control-hover);
+    border-color: var(--accent);
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
 }
 
 button.icon {
@@ -202,9 +221,30 @@ button.icon[data-state="unavailable"] {
     stroke-linecap: round;
 }
 
-.topbar input[type="search"] {
+.search-field {
+    position: relative;
+    display: flex;
     flex: 1;
     max-width: 420px;
+}
+
+.search-field input[type="search"] {
+    width: 100%;
+    padding-left: 29px;
+}
+
+.search-field svg {
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    width: 15px;
+    height: 15px;
+    margin-top: -7px;
+    fill: none;
+    stroke: var(--topbar-soft);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    pointer-events: none;
 }
 
 .topbar-actions {
@@ -1423,6 +1463,23 @@ pre {
 .connection.live { color: var(--ok); }
 .connection.connecting { color: var(--warn); }
 .connection.polling { color: var(--warn); }
+
+/* Only the live class pulses: a ring on a dead stream would claim a connection that is gone. */
+.connection.live::before {
+    animation: connection-pulse 2.4s ease-out infinite;
+}
+
+@keyframes connection-pulse {
+    0% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 60%, transparent); }
+    70% { box-shadow: 0 0 0 6px color-mix(in srgb, currentColor 0%, transparent); }
+    100% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 0%, transparent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .connection.live::before {
+        animation: none;
+    }
+}
 
 .empty {
     margin: 0;

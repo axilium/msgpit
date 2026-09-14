@@ -19,15 +19,21 @@
         msgpit
     </span>
 
-    <input id="search" type="search" placeholder="Filter by recipient or text" aria-label="Filter messages">
+    <span class="search-field">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="7" cy="7" r="4.6"/>
+            <path d="m10.4 10.4 3 3"/>
+        </svg>
+        <input id="search" type="search" placeholder="Filter by recipient or text" aria-label="Filter messages">
+    </span>
 
     <div class="topbar-actions">
-        <select id="scenario" aria-label="Force a failure on the next request">
-            <option value="">No forced failure</option>
-            <option value="InvalidNumber">Next request: invalid number</option>
-            <option value="Unauthorized">Next request: unauthorized</option>
-            <option value="RateLimited">Next request: rate limited</option>
-            <option value="ServerError">Next request: server error</option>
+        <select id="scenario" aria-label="Force a failure on the next SMS request">
+            <option value="">No forced SMS failure</option>
+            <option value="InvalidNumber">Next SMS: invalid number</option>
+            <option value="Unauthorized">Next SMS: unauthorized</option>
+            <option value="RateLimited">Next SMS: rate limited</option>
+            <option value="ServerError">Next SMS: server error</option>
         </select>
         <button id="notify" type="button" class="ghost icon" aria-pressed="false" title="Desktop notifications">
             <svg viewBox="0 0 20 20" aria-hidden="true">
