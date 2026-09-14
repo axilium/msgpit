@@ -550,9 +550,20 @@ button.danger {
     white-space: nowrap;
 }
 
+/* Who it went to, on its own line: an address and the first words of the body on one line read
+   as one sentence, and it is two different things. */
+.list .recipient {
+    margin: 2px 0 0;
+    color: var(--text-soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .list .preview {
     margin: 1px 0 5px;
-    color: var(--text-soft);
+    font-size: 12px;
+    color: var(--text-faint);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

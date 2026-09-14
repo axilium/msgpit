@@ -336,7 +336,8 @@ const renderList = () => {
                 <span class="to">${escapeHtml(message.channel === 'email' ? (message.meta.subject || '(no subject)') : message.to)}</span>
                 <time datetime="${escapeHtml(message.createdAt)}">${formatTime(message.createdAt)}</time>
             </div>
-            <p class="preview">${message.channel === 'email' ? `${escapeHtml(recipientLabel(message))} &middot; ` : ''}${escapeHtml(message.body) || '<em>empty</em>'}</p>
+            ${message.channel === 'email' ? `<p class="recipient">${escapeHtml(recipientLabel(message))}</p>` : ''}
+            <p class="preview">${escapeHtml(message.body) || '<em>empty</em>'}</p>
             <div class="tags">
                 <span class="tag${message.meta.imported ? ' imported' : ''}">${message.meta.imported ? 'imported' : escapeHtml(message.provider)}</span>
                 <span class="tag">${escapeHtml(message.channel)}</span>
