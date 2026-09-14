@@ -8,9 +8,11 @@ use Msgpit\Core\DeliveryStatus;
 use Msgpit\Core\Docs;
 use Msgpit\Core\DlrDispatcher;
 use Msgpit\Core\LinkChecker;
+use Msgpit\Core\MailCapture;
 use Msgpit\Core\Message;
 use Msgpit\Core\ProviderRegistry;
 use Msgpit\Core\RawRequest;
+use Msgpit\Core\SpamAssassin;
 use Msgpit\Core\Scenario;
 use Msgpit\Core\Storage;
 use Msgpit\Core\SupportsDeliveryReports;
@@ -24,6 +26,9 @@ use Msgpit\Http\Response;
 /** The /api routes: the UI talks to these, and so do integration tests in consuming projects. */
 final readonly class Api
 {
+    /** A mail client can export a message with a video attached; there has to be a ceiling. */
+    private const MAX_IMPORT = 30 * 1024 * 1024;
+
     public function __construct(
         private Storage $storage,
         private ProviderRegistry $registry,
@@ -31,6 +36,7 @@ final readonly class Api
         private Docs $docs,
         private string $version = 'dev',
         private LinkChecker $linkChecker = new LinkChecker(),
+        private ?MailCapture $capture = null,
     ) {}
 
     public function handle(Request $request): ?Response
@@ -41,12 +47,37 @@ final readonly class Api
             $request->method === 'GET' && $path === '/messages' => $this->list($request),
             $request->method === 'DELETE' && $path === '/messages' => $this->clear(),
             $request->method === 'POST' && $path === '/messages/read' => $this->markAllRead(),
+            $request->method === 'POST' && $path === '/messages/import' => $this->import($request),
             $request->method === 'GET' && $path === '/providers' => $this->providers(),
             $request->method === 'POST' && $path === '/scenario' => $this->scenario($request),
             $request->method === 'GET' && $path === '/scenarios' => $this->scenarios(),
             $request->method === 'GET' && $path === '/docs' => Response::json(['pages' => $this->docs->index()]),
             default => $this->messageRoutes($request, $path),
         };
+    }
+
+    /**
+     * Takes in a .eml dropped on the UI. The body is the file as it came off disk, because a
+     * mail client exports the message verbatim and re-encoding it would change what we are asked
+     * to judge.
+     */
+    private function import(Request $request): Response
+    {
+        if (trim($request->body) === '') {
+            return Response::json(['error' => 'An empty file is not a message.'], 400);
+        }
+
+        if (strlen($request->body) > self::MAX_IMPORT) {
+            return Response::json(['error' => 'That file is larger than msgpit accepts.'], 413);
+        }
+
+        // Percent encoded by the UI: a header carries latin-1, and mail files are named in Dutch.
+        $filename = rawurldecode($request->headers['x-msgpit-filename'] ?? '');
+        $capture = $this->capture ?? new MailCapture($this->storage, SpamAssassin::fromEnvironment());
+
+        $stored = $capture->import($request->body, $filename !== '' ? $filename : null);
+
+        return Response::json(['imported' => $stored], 201);
     }
 
     private function messageRoutes(Request $request, string $path): ?Response

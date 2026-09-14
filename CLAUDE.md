@@ -68,6 +68,34 @@ with it: no POP3, no link checking, no Outlook compatibility report.
 - Docksal projects reach it through the network aliases `mail` and `mailpit`, so the sendmail
   configuration that Docksal's cli image ships (`msmtp ... --host=mail --port=1025`) needs no change.
 
+### Imported .eml files
+
+A `.eml` dragged onto the UI goes to `POST /api/messages/import` and is stored like any other mail,
+so the spam score, html check and link check work on a message that was already sent elsewhere.
+
+- **An import is not a delivery, and the UI has to say so.** It is stored under the provider
+  `import` rather than `smtp`, carries `meta.imported`, and shows an "imported" tag in the list and
+  a line in the detail explaining what is different.
+- There is no envelope, because nobody delivered the file. Recipients come from `To`, `Cc` and
+  `Bcc`, the sender from `Return-Path` or `From`, and `envelopeSender`/`envelopeRecipients` stay
+  **absent** rather than being filled with those. Reporting them would claim a delivery that never
+  happened, and a Bcc that only the real envelope knew about is simply not recoverable.
+- The file goes up as raw bytes. Re-encoding it would change the very thing the checks are asked to
+  judge. The filename travels percent encoded in `X-Msgpit-Filename`, because a header carries
+  latin-1 and mail files are named in Dutch.
+- The drop target is the whole window: a file coming out of a mail client lands wherever the cursor
+  is, and hunting for a rectangle is not an improvement.
+- **`preventDefault()` on every dragover, not only on drags that announce `Files`.** A message
+  dragged out of macOS Mail is a file promise, and the drag does not always advertise a file, so
+  testing the types first means the browser opens the message in a new tab and the page is gone.
+  By the time the drop tells us what it carries, objecting is too late.
+- **A drag straight out of macOS Mail carries no message.** It puts `message:<message-id>` on the
+  drag as a `text/uri-list`: a pointer into Mail's own store, which only Mail can resolve. Reading
+  the drop more carefully will not help, so do not try again. The drop names that case
+  specifically, and the **Import .eml** button exists because of it. A drop that carries nothing
+  also prints its types and values, which is the only way to tell "this client cannot" apart from
+  "we are reading it wrong".
+
 ### HTML check
 
 `Mime\HtmlCheck` scores a message's html against the caniemail data bundled at
@@ -272,6 +300,7 @@ Providers are pure translators: parse request, validate required fields and auth
 | `GET /api/messages?provider=&channel=&to=&since=` | List messages (newest first) |
 | `GET /api/messages/{id}` | Message detail incl. raw request and DLR history |
 | `DELETE /api/messages` | Clear all |
+| `POST /api/messages/import` | Import a raw `.eml` (body is the file) |
 | `POST /api/messages/{id}/read` | Mark one message read |
 | `POST /api/messages/read` | Mark everything read |
 | `POST /api/messages/{id}/dlr` | `{"status":"delivered"}` send delivery report |

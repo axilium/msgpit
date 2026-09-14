@@ -22,9 +22,46 @@ final readonly class MailCapture
         private ?SpamAssassin $spamAssassin = null,
     ) {}
 
+    /**
+     * Takes in a .eml file, which has no envelope: nobody delivered it, it was dragged in from a
+     * mail client. The recipients then come from the headers, which is the closest thing to who
+     * the message was for, and the source is recorded so the difference stays visible.
+     */
+    public function import(string $raw, ?string $filename = null): int
+    {
+        $parsed = Parser::parse($raw);
+        $recipients = [];
+
+        foreach (['to', 'cc', 'bcc'] as $header) {
+            foreach (ParsedMessage::addresses($parsed->headers[$header] ?? '') as $address) {
+                $recipients[] = $address;
+            }
+        }
+
+        // A message with no recipient at all still tells you something, so it is kept under a
+        // placeholder rather than refused.
+        $recipients = array_values(array_unique($recipients)) ?: ['(no recipient)'];
+
+        $sender = $parsed->headers['return-path'] ?? $parsed->from;
+
+        return $this->store(
+            $parsed,
+            new Envelope($sender, $recipients, $raw),
+            ['imported' => true, 'filename' => $filename],
+        );
+    }
+
     public function capture(Envelope $envelope): void
     {
-        $parsed = Parser::parse($envelope->data);
+        $this->store(Parser::parse($envelope->data), $envelope);
+    }
+
+    /**
+     * @param array<string, mixed> $extra
+     * @return int the number of stored messages, one per recipient
+     */
+    private function store(ParsedMessage $parsed, Envelope $envelope, array $extra = []): int
+    {
         $batchId = Uuid::v4();
         $messages = [];
 
@@ -34,30 +71,39 @@ final readonly class MailCapture
         foreach ($envelope->recipients as $recipient) {
             $messages[] = Message::create(
                 batchId: $batchId,
-                provider: 'smtp',
+                provider: $extra === [] ? 'smtp' : 'import',
                 channel: Channel::Email,
                 to: $recipient,
                 body: $parsed->preview(),
                 from: $parsed->from !== '' ? $parsed->from : $envelope->sender,
                 providerRef: $parsed->headers['message-id'] ?? null,
-                meta: self::meta($parsed, $envelope, $spam),
+                meta: self::meta($parsed, $envelope, $spam, $extra),
             );
         }
 
         if ($messages === []) {
-            return;
+            return 0;
         }
 
         $this->storage->storeMail($messages, $parsed);
+
+        return count($messages);
     }
 
-    /** @return array<string, mixed> */
-    private static function meta(ParsedMessage $parsed, Envelope $envelope, ?SpamReport $spam): array
+    /**
+     * @param array<string, mixed> $extra
+     * @return array<string, mixed>
+     */
+    private static function meta(ParsedMessage $parsed, Envelope $envelope, ?SpamReport $spam, array $extra = []): array
     {
+        // An import has no envelope: the addresses below were read off the headers, and reporting
+        // them as envelope data would claim a delivery that never happened.
+        $imported = $extra !== [];
+
         $meta = [
             'subject' => $parsed->subject,
-            'envelopeSender' => $envelope->sender,
-            'envelopeRecipients' => $envelope->recipients,
+            'envelopeSender' => $imported ? null : $envelope->sender,
+            'envelopeRecipients' => $imported ? [] : $envelope->recipients,
             'to' => $parsed->headers['to'] ?? null,
             'cc' => $parsed->headers['cc'] ?? null,
             'replyTo' => $parsed->headers['reply-to'] ?? null,
@@ -67,6 +113,6 @@ final readonly class MailCapture
             'spam' => $spam?->toArray(),
         ];
 
-        return array_filter($meta, static fn (mixed $value): bool => $value !== null && $value !== []);
+        return array_filter($meta + $extra, static fn (mixed $value): bool => $value !== null && $value !== []);
     }
 }

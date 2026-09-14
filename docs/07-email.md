@@ -169,6 +169,42 @@ The unread count, the notifications and the filters work the same for mail as fo
 Filtering on the channel `email` gives you only mail; `GET /api/messages?channel=email` does the
 same over the API.
 
+## Importing a .eml
+
+A message you want to look at is not always one you can send again. A bounce a customer forwarded,
+a mail from production, something that landed in a spam folder: drag the `.eml` onto the message
+list and msgpit reads it the same way it reads a delivered message. The parts, headers, html check,
+link check and spam score all work on it.
+
+**Dragging straight out of macOS Mail does not work, and cannot be made to.** Mail puts a
+`message:` url on the drag, which points at the message inside Mail by its Message-ID. No bytes
+travel with it and only Mail can resolve it, so there is nothing for a web page to read. msgpit
+stops the browser from opening the message in a new tab, says what the drop carried, and points at
+the two routes that do work:
+
+- Drag the message from Mail to the Finder or the desktop first. Mail writes a real `.eml` there,
+  and that file can be dropped on msgpit.
+- Use the **Import .eml** button above the message list, which opens a file picker and takes
+  several files at once.
+
+One thing is genuinely different, and the UI says so with an **Imported** label. A delivered message
+has an SMTP envelope: the sending server named the sender and every recipient separately, which is
+why a Bcc shows up at all. A `.eml` on disk has no envelope, because nobody delivered it. The
+recipients therefore come from the `To`, `Cc` and `Bcc` headers, and the sender from `Return-Path`
+or `From`. That is the closest thing on record, not the same thing: a mail actually delivered to an
+address that appears in no header will not show that address here.
+
+An import is stored under the provider `import` rather than `smtp`, so a test asserting what your
+application sent never picks one up by accident.
+
+```
+curl -X POST --data-binary @bounce.eml \
+  -H 'X-Msgpit-Filename: bounce.eml' \
+  http://msgpit:8080/api/messages/import
+```
+
+Files up to 30 MB are accepted, one message per recipient as everywhere else in msgpit.
+
 ## What is not there
 
 msgpit accepts a message and stores it. It never delivers, never bounces, and never answers a

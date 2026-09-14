@@ -83,6 +83,7 @@ a message was sent, then clear.
 | `GET /api/messages?provider=&channel=&to=&since=` | List messages, newest first |
 | `GET /api/messages/{id}` | One message with its raw request and delivery reports |
 | `DELETE /api/messages` | Clear all |
+| `POST /api/messages/import` | Import a raw `.eml` (body is the file) |
 | `POST /api/messages/{id}/dlr` | `{"status":"delivered"}` sends a delivery report |
 | `POST /api/scenario` | `{"scenario":"ServerError"}` fails the next provider request |
 | `GET /api/providers` | Enabled providers and their capabilities |

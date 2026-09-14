@@ -531,6 +531,26 @@ button.danger {
 .tag.status-failed { background: var(--danger-soft); color: var(--danger); }
 .tag.encoding-ucs2 { background: var(--warn-soft); color: var(--warn); }
 
+/* An import was dragged in, not delivered. It should not read like any other provider tag. */
+.tag.imported { background: var(--warn-soft); color: var(--warn); }
+
+/* Running text, not a flex row: the sentence has punctuation that must stay against its word. */
+.imported-note {
+    margin: 6px 0 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-soft);
+}
+
+.imported-note .tag {
+    margin-right: 4px;
+}
+
+.imported-note code {
+    font-family: var(--mono);
+    font-size: 11px;
+}
+
 /* Detail */
 
 .detail {
@@ -1460,4 +1480,70 @@ pre {
         border-right: 0;
         border-bottom: 1px solid var(--border);
     }
+}
+
+/*
+ * The drop target is the whole window rather than a pane: a file coming out of a mail client
+ * lands wherever the cursor happens to be, and hunting for a rectangle is not an improvement.
+ */
+/* Our display beats the user agent's [hidden] rule, so the attribute needs saying again. */
+.dropzone[hidden] {
+    display: none;
+}
+
+.dropzone {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--bg) 78%, transparent);
+    backdrop-filter: blur(2px);
+}
+
+.dropzone-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 28px 40px;
+    border: 2px dashed var(--accent);
+    border-radius: 12px;
+    background: var(--bg-panel);
+    color: var(--text);
+    box-shadow: 0 12px 32px rgb(0 0 0 / 18%);
+}
+
+.dropzone-card svg {
+    width: 34px;
+    height: 34px;
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.dropzone-card span {
+    font-size: 12px;
+    color: var(--text-soft);
+    /* The note is two sentences with a break between them: what happened, and what to do. */
+    white-space: pre-line;
+}
+
+.dropzone.failed .dropzone-card {
+    border-color: var(--danger);
+}
+
+.dropzone.failed .dropzone-card svg {
+    stroke: var(--danger);
+}
+
+.dropzone.failed .dropzone-card span {
+    color: var(--danger);
+}
+
+.dropzone.failed .dropzone-card {
+    cursor: pointer;
 }

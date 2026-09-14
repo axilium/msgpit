@@ -4,6 +4,9 @@ import {renderHtmlSource} from '/ui/htmlsource.js';
 
 const FALLBACK_POLL_MS = 2000;
 
+/** A drag only keeps firing while it is over the window, so silence means it ended elsewhere. */
+const DRAG_IDLE_MS = 400;
+
 /**
  * The url says what you are looking at, so a refresh lands you back there: which message, which
  * tab, or which reference page. A bare tab name is still understood, since that is what the
@@ -48,6 +51,10 @@ const el = {
     statSegments: document.getElementById('stat-segments'),
     statRecipients: document.getElementById('stat-recipients'),
     connection: document.getElementById('connection'),
+    import: document.getElementById('import'),
+    importInput: document.getElementById('import-input'),
+    dropzone: document.getElementById('dropzone'),
+    dropzoneNote: document.getElementById('dropzone-note'),
     version: document.getElementById('version'),
 };
 
@@ -306,7 +313,7 @@ const renderList = () => {
             </div>
             <p class="preview">${message.channel === 'email' ? `${escapeHtml(message.to)} &middot; ` : ''}${escapeHtml(message.body) || '<em>empty</em>'}</p>
             <div class="tags">
-                <span class="tag">${escapeHtml(message.provider)}</span>
+                <span class="tag${message.meta.imported ? ' imported' : ''}">${message.meta.imported ? 'imported' : escapeHtml(message.provider)}</span>
                 <span class="tag">${escapeHtml(message.channel)}</span>
                 ${message.segments ? `<span class="tag${message.encoding === 'UCS-2' ? ' encoding-ucs2' : ''}">${escapeHtml(message.encoding)} &middot; ${message.segments}</span>` : ''}
                 <span class="tag status-${escapeHtml(message.status)}">${escapeHtml(message.status)}</span>
@@ -751,6 +758,13 @@ const renderDetail = (message) => {
                 ${escapeHtml(message.channel)} &middot;
                 ${formatDateTime(message.createdAt)} &middot; ${escapeHtml(message.status)}
             </p>
+            ${message.meta.imported ? `
+                <p class="imported-note">
+                    <span class="tag imported">imported</span>
+                    ${message.meta.filename ? `Imported from <code>${escapeHtml(message.meta.filename)}</code>, so` : 'Imported, so'}
+                    the addresses come from the headers rather than from an envelope.
+                </p>
+            ` : ''}
         </div>
         <div class="tabs" role="tablist">
             ${tabs.map(([id, label, count, tone]) => `
@@ -1190,9 +1204,17 @@ document.addEventListener('click', (event) => {
 });
 
 document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && !el.navDocs.hidden) {
+    if (event.key !== 'Escape') {
+        return;
+    }
+
+    if (!el.navDocs.hidden) {
         closeDocsMenu();
         el.docsToggle.focus();
+    }
+
+    if (el.dropzone.classList.contains('failed')) {
+        showDropzone(false);
     }
 });
 
@@ -1234,11 +1256,201 @@ el.markRead.addEventListener('click', async () => {
     await refresh();
 });
 
+// The reliable way in: a drag out of a mail client does not always carry the file itself.
+el.import.addEventListener('click', () => el.importInput.click());
+
+el.importInput.addEventListener('change', async () => {
+    const files = Array.from(el.importInput.files ?? []);
+
+    // Reset first, or picking the same file twice fires no second change event.
+    el.importInput.value = '';
+
+    if (files.length > 0) {
+        await importFiles(files);
+    }
+});
+
 el.clear.addEventListener('click', async () => {
     await api('/messages', {method: 'DELETE'});
     clearDetail();
     state.signature = '';
     await refresh();
+});
+
+/**
+ * Dropping a .eml from a mail client. The file goes up as it came off disk, because re-encoding it
+ * would change the very thing the spam and html checks are asked to judge.
+ *
+ * Counting enter and leave rather than toggling on each: dragging over a child element fires a
+ * leave for the parent, and the overlay would flicker away under the cursor.
+ */
+let dragDepth = 0;
+let dragTimer = null;
+
+const dragTypes = (event) => Array.from(event.dataTransfer?.types ?? []);
+
+/**
+ * Whether a drag is worth showing the overlay for. Not only "Files": a message dragged out of
+ * macOS Mail announces itself as a url or as nothing at all, because the file does not exist yet
+ * when the drag starts. The browser is willing to open it, so it is a file in every way that
+ * matters here.
+ */
+const carriesFiles = (event) => {
+    const types = dragTypes(event);
+
+    return types.includes('Files') || types.includes('text/uri-list') || types.length === 0;
+};
+
+/**
+ * The files in a drop, from whichever place the browser put them. `files` is empty for a drag that
+ * was a promise until the moment it landed; `items` still has it then.
+ */
+const droppedFiles = (transfer) => {
+    const files = Array.from(transfer?.files ?? []);
+
+    if (files.length > 0) {
+        return files;
+    }
+
+    return Array.from(transfer?.items ?? [])
+        .filter((item) => item.kind === 'file')
+        .map((item) => item.getAsFile())
+        .filter((file) => file !== null);
+};
+
+const showDropzone = (visible, note = null) => {
+    el.dropzone.hidden = !visible;
+    el.dropzoneNote.textContent = note ?? 'They are imported and checked, not delivered';
+    el.dropzone.classList.toggle('failed', note !== null);
+};
+
+const importFiles = async (files) => {
+    const results = await Promise.all(files.map(async (file) => {
+        try {
+            const response = await fetch('/api/messages/import', {
+                method: 'POST',
+                headers: {'Content-Type': 'message/rfc822', 'X-Msgpit-Filename': encodeURIComponent(file.name)},
+                body: await file.arrayBuffer(),
+            });
+
+            return response.ok ? null : (await response.json().catch(() => ({}))).error ?? `Import failed: ${response.status}`;
+        } catch {
+            return 'Import failed: msgpit did not answer';
+        }
+    }));
+
+    const failed = results.filter((error) => error !== null);
+
+    if (failed.length > 0) {
+        showDropzone(true, failed[0]);
+
+        return;
+    }
+
+    state.signature = '';
+    await refresh();
+};
+
+const closeDropzone = () => {
+    clearTimeout(dragTimer);
+    dragTimer = null;
+    dragDepth = 0;
+    showDropzone(false);
+};
+
+/**
+ * A drag released outside the window, or onto another application, fires neither a leave nor a
+ * drop, and the overlay would then cover the whole UI until the page is reloaded. Drag events keep
+ * arriving as long as the pointer is over the window, so their silence is what ends the drag.
+ */
+const keepDropzoneAlive = () => {
+    clearTimeout(dragTimer);
+    dragTimer = setTimeout(closeDropzone, DRAG_IDLE_MS);
+};
+
+// A failure tells you what to do next, so it waits to be read rather than timing out.
+el.dropzone.addEventListener('click', () => {
+    if (el.dropzone.classList.contains('failed')) {
+        showDropzone(false);
+    }
+});
+
+/**
+ * Why a drop carried no file.
+ *
+ * macOS Mail puts a "message:" url on the drag: a pointer to the message inside Mail, by its
+ * Message-ID. No bytes travel with it and only Mail can resolve it, so there is nothing here to
+ * import however carefully the drop is read. Do not try again, and say so rather than failing
+ * generically.
+ *
+ * Read here and now: outside the drop event the data is walled off and every read comes back
+ * empty, which looks exactly like a drag that carried nothing.
+ */
+const dropFailure = (transfer) => {
+    const uri = Array.from(transfer?.types ?? []).includes('text/uri-list')
+        ? decodeURIComponent(String(transfer.getData('text/uri-list') ?? ''))
+        : '';
+
+    return uri.startsWith('message:')
+        ? 'macOS Mail handed over a link to the message, not the message itself.\nDrag it to the Finder first, then drop the .eml here, or use Import .eml.'
+        : 'Your mail client handed over no file.\nSave the message first, or use Import .eml.';
+};
+
+window.addEventListener('dragenter', (event) => {
+    if (!carriesFiles(event)) {
+        return;
+    }
+
+    dragDepth++;
+    showDropzone(true);
+    keepDropzoneAlive();
+});
+
+// Leaving through the window edge has no relatedTarget, and no further event is coming.
+window.addEventListener('dragleave', (event) => {
+    dragDepth = event.relatedTarget === null ? 0 : Math.max(0, dragDepth - 1);
+
+    if (dragDepth === 0) {
+        closeDropzone();
+    }
+});
+
+/** Dropping text into the filter box is the browser's job, not ours. */
+const dropsIntoAField = (event) => !carriesFiles(event)
+    && event.target instanceof Element
+    && event.target.closest('input, textarea, select') !== null;
+
+/*
+ * Unconditionally for everything else, and this is the whole trick: without it the browser
+ * opens what you dropped and the page is gone. Testing the types first is too clever, because a drag out of a mail client
+ * does not always say it carries a file, and by the time we know it is too late to object.
+ */
+window.addEventListener('dragover', (event) => {
+    if (dropsIntoAField(event)) {
+        return;
+    }
+
+    event.preventDefault();
+    keepDropzoneAlive();
+});
+
+window.addEventListener('drop', async (event) => {
+    if (dropsIntoAField(event)) {
+        return;
+    }
+
+    event.preventDefault();
+    closeDropzone();
+
+    const files = droppedFiles(event.dataTransfer);
+
+    if (files.length > 0) {
+        await importFiles(files);
+
+        return;
+    }
+
+    showDropzone(true, dropFailure(event.dataTransfer));
 });
 
 // SSE is the live path; polling only takes over while the stream is down.
