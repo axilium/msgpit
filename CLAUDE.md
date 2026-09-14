@@ -125,6 +125,15 @@ Mail analysis lives here, so do not trim the list: a missing `Date`, a `Return-P
 disagrees with `From`, an `Auto-Submitted` that stops an auto-responder. A `Bcc` is visible here
 and nowhere else.
 
+### The preview iframe
+
+The html as the recipient sees it, in a sandboxed iframe: no scripts, no forms, its own origin.
+
+A stylesheet of our own goes in ahead of the message, setting a system font stack and a base size.
+Without it the browser falls back to Times, which no mail client does: every one of them applies a
+default of its own, so Times is the one thing the message will certainly not look like anywhere.
+It is a starting point, not an override; anything the message says about type wins.
+
 ### The html source view
 
 `public/ui/htmlsource.js` indents and colours the html of a message. A tokenizer, not a syntax

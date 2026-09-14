@@ -682,7 +682,28 @@ button.danger {
 .tabs button[aria-selected="true"] {
     color: var(--accent);
     border-bottom-color: var(--accent);
+}
+
+.tabs button[aria-selected="true"] .tab-label {
     font-weight: 600;
+}
+
+/*
+ * The label is always as wide as its own bold version. Selecting a tab makes it bold, and without
+ * this every tab to the right of it shifts as you click along the row. The grid takes the width of
+ * its widest item, and the bold copy underneath has no height and is never read out.
+ */
+.tab-label {
+    display: inline-grid;
+    justify-items: start;
+}
+
+.tab-label::after {
+    content: attr(data-label);
+    font-weight: 600;
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
 }
 
 .tabs .count {

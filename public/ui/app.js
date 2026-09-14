@@ -354,8 +354,16 @@ const renderMailPreview = (message) => {
         message.html,
     );
 
+    // A browser with no stylesheet falls back to Times, which no mail client does: they all apply
+    // a default of their own. Set one here too, as a starting point the message overrides the
+    // moment it says anything about type itself.
+    const base = `<style>
+        html { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+               font-size: 14px; line-height: 1.5; color: #1a1a1a; background: #fff; }
+    </style>`;
+
     return `<iframe class="mail-preview" sandbox="allow-popups" referrerpolicy="no-referrer"
-                    title="Message preview" srcdoc="${escapeHtml(html)}"></iframe>`;
+                    title="Message preview" srcdoc="${escapeHtml(base + html)}"></iframe>`;
 };
 
 const mailHeaders = (message) => {
@@ -893,7 +901,8 @@ const renderDetail = (message) => {
         <div class="tabs" role="tablist">
             ${tabs.map(([id, label, count, tone]) => `
                 <button type="button" role="tab" data-tab="${id}" aria-selected="${state.tab === id}">
-                    ${label}${count ? `<span class="count${tone ? ` ${tone}` : ''}">${count}</span>` : ''}
+                    <span class="tab-label" data-label="${escapeHtml(label)}">${escapeHtml(label)}</span>
+                    ${count ? `<span class="count${tone ? ` ${tone}` : ''}">${count}</span>` : ''}
                 </button>
             `).join('')}
         </div>
