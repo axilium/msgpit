@@ -565,6 +565,31 @@ button.danger {
     gap: 2px;
     padding: 0 20px;
     border-bottom: 1px solid var(--border);
+
+    /* A mail can have seven tabs, which will not fit in a narrow pane. They scroll sideways
+       rather than wrapping, and that scroll stays here: the pane behind it must not move. */
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+    display: none;
+}
+
+/* The fade is the only hint that there is more, since the scrollbar is hidden. It is a mask, so
+   it costs no colour and works in either theme. */
+.tabs.fade-right {
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+
+.tabs.fade-left {
+    mask-image: linear-gradient(to right, transparent, #000 28px);
+}
+
+.tabs.fade-left.fade-right {
+    mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
 }
 
 .tabs button {
@@ -574,6 +599,10 @@ button.danger {
     border-radius: 0;
     background: transparent;
     color: var(--text-soft);
+
+    /* No shrinking and no wrapping: "HTML check" stays one line, badge and all. */
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .tabs button:hover {

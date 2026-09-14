@@ -349,8 +349,8 @@ const mailPanels = {
             <h3>Headers</h3>
             ${mailHeaders(message)}
             <div class="body-head">
-                <h3>${showHtml ? 'As the recipient sees it' : 'Plain text'}</h3>
                 ${bodyToggle(message)}
+                <h3>${showHtml ? 'As the recipient sees it' : 'Plain text'}</h3>
             </div>
             ${showHtml
                 ? renderMailPreview(message)
@@ -547,11 +547,11 @@ const panels = {
 
     raw: (message) => `
         <div class="body-head">
-            <h3>${isMail(message) ? 'Message as received' : 'Request as received'}</h3>
             ${isMail(message) ? `<div class="switch" role="group" aria-label="Raw view">
                 <button type="button" data-raw="structured" aria-pressed="${state.rawView !== 'plain'}">Structured</button>
                 <button type="button" data-raw="plain" aria-pressed="${state.rawView === 'plain'}">Plain</button>
             </div>` : ''}
+            <h3>${isMail(message) ? 'Message as received' : 'Request as received'}</h3>
         </div>
         ${isMail(message) && state.rawView !== 'plain'
             ? renderRawMessage(message.rawRequest ?? '')
@@ -675,6 +675,8 @@ const renderDetail = (message) => {
         <div class="panel" role="tabpanel">${(panelsFor[state.tab] ?? panelsFor.message)(message)}</div>
     `;
 
+    keepTabsUsable();
+
     el.detail.querySelectorAll('[data-tab]').forEach((button) => {
         button.addEventListener('click', () => {
             state.tab = button.dataset.tab;
@@ -720,6 +722,44 @@ const renderDetail = (message) => {
             await openMessage(message.id);
         });
     });
+};
+
+/**
+ * The tab bar scrolls sideways when its tabs do not fit. Two things have to happen after every
+ * render, because renderDetail() rebuilds the bar and the browser forgets where it was: the
+ * selected tab has to be brought back into view, and the fade has to match what is left to
+ * scroll. scrollLeft is set directly rather than through scrollIntoView, which would also move
+ * whatever is scrollable above it.
+ */
+const keepTabsUsable = () => {
+    const bar = el.detail.querySelector('.tabs');
+
+    if (!bar) {
+        return;
+    }
+
+    const updateFade = () => {
+        const room = bar.scrollWidth - bar.clientWidth;
+
+        bar.classList.toggle('fade-left', bar.scrollLeft > 4);
+        bar.classList.toggle('fade-right', room > 4 && bar.scrollLeft < room - 4);
+    };
+
+    const active = bar.querySelector('[aria-selected="true"]');
+
+    if (active) {
+        const left = active.offsetLeft - bar.offsetLeft;
+        const right = left + active.offsetWidth;
+
+        if (left < bar.scrollLeft) {
+            bar.scrollLeft = Math.max(0, left - 20);
+        } else if (right > bar.scrollLeft + bar.clientWidth) {
+            bar.scrollLeft = right - bar.clientWidth + 20;
+        }
+    }
+
+    bar.addEventListener('scroll', updateFade, {passive: true});
+    updateFade();
 };
 
 const clearDetail = () => {
