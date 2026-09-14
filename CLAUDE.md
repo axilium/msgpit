@@ -77,6 +77,11 @@ so the spam score, html check and link check work on a message that was already 
 - **An import is not a delivery, and the UI has to say so.** It is stored under the provider
   `import` rather than `smtp`, carries `meta.imported`, and shows an "imported" tag in the list and
   a line in the detail explaining what is different.
+- **One row per import, whatever the number of addresses.** This is the one place that breaks
+  "one stored message per recipient", and deliberately: that rule exists because a send to three
+  people is three deliveries that can each fail on their own. An import already arrived, once, so
+  three identical rows would be noise. The addresses are joined into `to` rather than dropped, so
+  the recipient filter still finds the message: it matches on a substring.
 - There is no envelope, because nobody delivered the file. Recipients come from `To`, `Cc` and
   `Bcc`, the sender from `Return-Path` or `From`, and `envelopeSender`/`envelopeRecipients` stay
   **absent** rather than being filled with those. Reporting them would claim a delivery that never

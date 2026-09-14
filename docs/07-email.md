@@ -198,13 +198,17 @@ address that appears in no header will not show that address here.
 An import is stored under the provider `import` rather than `smtp`, so a test asserting what your
 application sent never picks one up by accident.
 
+It is also a single entry in the list, however many addresses are on it. Mail msgpit catches is
+stored once per recipient, because a send to three people is three deliveries and each can fail on
+its own. An import already arrived, once. Filtering by any one of its recipients still finds it.
+
 ```
 curl -X POST --data-binary @bounce.eml \
   -H 'X-Msgpit-Filename: bounce.eml' \
   http://msgpit:8080/api/messages/import
 ```
 
-Files up to 30 MB are accepted, one message per recipient as everywhere else in msgpit.
+Files up to 30 MB are accepted.
 
 ## What is not there
 

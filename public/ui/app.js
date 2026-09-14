@@ -309,6 +309,17 @@ const renderEmptyState = () => {
         `;
 };
 
+/**
+ * Who a message went to, short enough to leave room for what it says. An import holds every
+ * address in one field, and spelling all three out fills the line before the body starts.
+ */
+const recipientLabel = (message) => {
+    const first = String(message.to ?? '').split(',')[0].trim();
+    const more = (message.meta.recipients ?? 1) - 1;
+
+    return more > 0 ? `${first} +${more}` : first;
+};
+
 const renderList = () => {
     const messages = visibleMessages();
 
@@ -325,7 +336,7 @@ const renderList = () => {
                 <span class="to">${escapeHtml(message.channel === 'email' ? (message.meta.subject || '(no subject)') : message.to)}</span>
                 <time datetime="${escapeHtml(message.createdAt)}">${formatTime(message.createdAt)}</time>
             </div>
-            <p class="preview">${message.channel === 'email' ? `${escapeHtml(message.to)} &middot; ` : ''}${escapeHtml(message.body) || '<em>empty</em>'}</p>
+            <p class="preview">${message.channel === 'email' ? `${escapeHtml(recipientLabel(message))} &middot; ` : ''}${escapeHtml(message.body) || '<em>empty</em>'}</p>
             <div class="tags">
                 <span class="tag${message.meta.imported ? ' imported' : ''}">${message.meta.imported ? 'imported' : escapeHtml(message.provider)}</span>
                 <span class="tag">${escapeHtml(message.channel)}</span>
@@ -375,7 +386,8 @@ const mailHeaders = (message) => {
         ['To', meta.to ?? message.to],
         ['Cc', meta.cc],
         ['Reply-To', meta.replyTo],
-        ['Delivered to', meta.to === message.to ? null : message.to],
+        // Nothing was delivered for an import, so the row says where the addresses came from.
+        [meta.imported ? 'Recipients' : 'Delivered to', meta.to === message.to ? null : message.to],
         ['Captured', formatDateTime(message.createdAt)],
     ].filter(([, value]) => value);
 
@@ -895,7 +907,7 @@ const renderDetail = (message) => {
         <div class="detail-head">
             <h2>${escapeHtml(title)}</h2>
             <p class="subtitle">
-                ${isMail(message) ? escapeHtml(message.to) : escapeHtml(message.provider)} &middot;
+                ${isMail(message) ? escapeHtml(recipientLabel(message)) : escapeHtml(message.provider)} &middot;
                 ${escapeHtml(message.channel)} &middot;
                 ${formatDateTime(message.createdAt)} &middot; ${escapeHtml(message.status)}
             </p>
