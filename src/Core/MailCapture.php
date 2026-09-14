@@ -44,10 +44,19 @@ final readonly class MailCapture
 
         $sender = $parsed->headers['return-path'] ?? $parsed->from;
 
+        /*
+         * One row, however many addresses are on it. Everywhere else in msgpit a request to three
+         * people is three messages, because that is three deliveries and each can succeed or fail
+         * on its own. An import is the opposite: one message that already arrived once, and three
+         * identical rows in the list would be noise rather than information.
+         *
+         * The addresses are joined rather than dropped, so filtering by recipient still finds it:
+         * that filter matches on a substring.
+         */
         return $this->store(
             $parsed,
-            new Envelope($sender, $recipients, $raw),
-            ['imported' => true, 'filename' => $filename],
+            new Envelope($sender, [implode(', ', $recipients)], $raw),
+            ['imported' => true, 'filename' => $filename, 'recipients' => count($recipients)],
         );
     }
 

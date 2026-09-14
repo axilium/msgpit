@@ -77,6 +77,11 @@ so the spam score, html check and link check work on a message that was already 
 - **An import is not a delivery, and the UI has to say so.** It is stored under the provider
   `import` rather than `smtp`, carries `meta.imported`, and shows an "imported" tag in the list and
   a line in the detail explaining what is different.
+- **One row per import, whatever the number of addresses.** This is the one place that breaks
+  "one stored message per recipient", and deliberately: that rule exists because a send to three
+  people is three deliveries that can each fail on their own. An import already arrived, once, so
+  three identical rows would be noise. The addresses are joined into `to` rather than dropped, so
+  the recipient filter still finds the message: it matches on a substring.
 - There is no envelope, because nobody delivered the file. Recipients come from `To`, `Cc` and
   `Bcc`, the sender from `Return-Path` or `From`, and `envelopeSender`/`envelopeRecipients` stay
   **absent** rather than being filled with those. Reporting them would claim a delivery that never
@@ -330,6 +335,13 @@ feature that looks broken and one that explains itself.
 
 The UI's top bar is dark in both light and dark themes; the workspace below it is the lighter
 surface. Colours come from the custom properties at the top of `style.css`, never hardcoded.
+
+**Only content can be selected, never the furniture.** The interface is chrome and the message is
+the content: dragging across the message list used to leave half of it highlighted, which looks
+broken and helps nobody, because nobody wants to copy a menu. Selection is given back to the dumps
+and to the message itself: `pre`, `code`, the raw message, header values, the plain text body, the
+reference pages and the form fields. The preview iframe is a document of its own and was never
+covered by this. A new panel that shows a dump needs saying so, or its content cannot be copied.
 
 ### Provider contract
 

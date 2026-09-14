@@ -79,20 +79,36 @@ final class MailImportTest extends TestCase
             'Tekst.',
         ]);
 
-        self::assertSame(['imported' => 3], json_decode($this->post($raw)->body, true));
+        $this->post($raw);
+        $message = $this->storage->all()[0];
 
-        $recipients = array_map(static fn ($message): string => $message->to, $this->storage->all());
-
-        sort($recipients);
-        self::assertSame(['derde@example.test', 'eerste@example.test', 'tweede@example.test'], $recipients);
+        foreach (['eerste@example.test', 'tweede@example.test', 'derde@example.test'] as $address) {
+            self::assertStringContainsString($address, $message->to);
+        }
     }
 
-    /** One .eml is one message, so the rows it produces share a batch like everywhere else. */
-    public function testTheRecipientsShareOneBatch(): void
+    /**
+     * Everywhere else a message to three people is three rows, because that is three deliveries
+     * and each can fail on its own. An import already arrived, once, so three identical rows would
+     * be noise.
+     */
+    public function testAMessageToSeveralPeopleIsOneRow(): void
+    {
+        $raw = "From: a@example.test\r\nTo: een@example.test, twee@example.test\r\nCc: drie@example.test\r\n\r\nTekst.";
+
+        self::assertSame(['imported' => 1], json_decode($this->post($raw)->body, true));
+        self::assertCount(1, $this->storage->all());
+        self::assertSame(3, $this->storage->all()[0]->meta['recipients'] ?? null);
+    }
+
+    /** Joined rather than dropped, because the recipient filter matches on a substring. */
+    public function testFilteringByAnyOfTheRecipientsFindsIt(): void
     {
         $this->post("From: a@example.test\r\nTo: een@example.test, twee@example.test\r\n\r\nTekst.");
 
-        self::assertCount(1, array_unique(array_map(static fn ($m): string => $m->batchId, $this->storage->all())));
+        foreach (['een@example.test', 'twee@example.test'] as $address) {
+            self::assertCount(1, $this->storage->all(['to' => $address]), $address);
+        }
     }
 
     public function testAnImportIsMarkedAsOneAndKeepsItsFilename(): void
