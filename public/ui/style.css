@@ -729,6 +729,126 @@ dl.fields dd {
     white-space: nowrap;
 }
 
+/* HTML compatibility check */
+
+.html-check {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+}
+
+.ring {
+    width: 148px;
+    height: 148px;
+    flex: none;
+    /* Start the first arc at twelve o'clock rather than three. */
+    transform: rotate(-90deg);
+}
+
+.ring .track { stroke: var(--bg-sunken); }
+.ring .yes { stroke: var(--ok); }
+.ring .partly { stroke: var(--warn); }
+.ring .no { stroke: var(--danger); }
+
+.ring text {
+    transform: rotate(90deg);
+    transform-origin: 64px 64px;
+    fill: var(--text);
+}
+
+.ring-value {
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.ring-label {
+    font-size: 10px;
+    fill: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.legend {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 12.5px;
+}
+
+.legend li {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 5px;
+}
+
+.legend .muted,
+p.muted {
+    color: var(--text-faint);
+}
+
+.swatch {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex: none;
+}
+
+.swatch.yes { background: var(--ok); }
+.swatch.partly { background: var(--warn); }
+.swatch.no { background: var(--danger); }
+
+.findings {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.findings li {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.finding {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    margin-bottom: 5px;
+}
+
+.finding-title {
+    font-weight: 600;
+}
+
+.finding-count {
+    color: var(--text-faint);
+    font-size: 12px;
+}
+
+/* One bar per feature, split the way its clients are split. */
+.support {
+    display: flex;
+    height: 7px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--bg-sunken);
+}
+
+.support .yes { background: var(--ok); }
+.support .partly { background: var(--warn); }
+.support .no { background: var(--danger); }
+
+p.source {
+    margin-top: 18px;
+    font-size: 12px;
+}
+
+p.source a {
+    color: var(--accent);
+}
+
 /* Spam score */
 
 .spam-score {

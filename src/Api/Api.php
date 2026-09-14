@@ -14,6 +14,7 @@ use Msgpit\Core\Storage;
 use Msgpit\Core\SupportsDeliveryReports;
 use Msgpit\Core\SupportsErrorScenarios;
 use Msgpit\Http\Request;
+use Msgpit\Mime\HtmlCheck;
 use Msgpit\Http\Response;
 
 /** The /api routes: the UI talks to these, and so do integration tests in consuming projects. */
@@ -105,6 +106,12 @@ final readonly class Api
             $detail['parts'] = $parts;
             $detail['html'] = $this->body($id, $parts, 'text/html');
             $detail['text'] = $this->body($id, $parts, 'text/plain');
+
+            // Worked out per request rather than stored: the compatibility data is updated now and
+            // then, and a score from six months ago would be quietly wrong.
+            if ($detail['html'] !== null) {
+                $detail['htmlCheck'] = HtmlCheck::analyse($detail['html'])?->toArray();
+            }
         }
 
         return Response::json($detail);

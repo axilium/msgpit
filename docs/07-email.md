@@ -59,6 +59,37 @@ The headers sit above the body, and a mail that carries both an html and a plain
 gets a switch between them. That plain text alternative is worth checking now and then: it is what
 anyone reading mail without html gets, and it is the version people forget to keep in step.
 
+## HTML check
+
+Email clients are a decade behind browsers and disagree with each other, so html that looks right
+in the preview can still fall apart in Outlook. The **HTML check** tab scores what the message
+uses against what clients actually support.
+
+It walks the document, collects every element, attribute and css property it finds, and looks each
+one up. The headline number is the share of tested client versions that support all of it
+outright; below it sits the list of features worth a second look, worst first:
+
+```
+gap, column-gap, row-gap   css      16 yes   9 partial  17 no
+<body> element             html     19 yes  14 partial  16 no
+box-shadow                 css      30 yes   4 partial  32 no
+display                    css      26 yes  20 partial   0 no
+```
+
+That list is the useful part. It does not say your mail is broken; it says which property is the
+gamble, so you can decide whether the design is worth it or whether a table would be safer.
+
+Each feature counts once no matter how often it occurs. Weighting by occurrence would flatter a
+message that repeats one safe property a hundred times, and the question is not how much safe css
+you wrote but whether anything risky is in there at all.
+
+A verdict of "unknown" counts for neither side: nobody measured it, so it is not evidence.
+
+The data comes from [caniemail.com](https://www.caniemail.com) by Rémi Parmentier, MIT licensed,
+and is bundled in the image rather than fetched at runtime. msgpit has to work offline, and a
+score that silently disappears when the network is down would be worse than one that is a few
+weeks old. Refresh it with `php bin/update-caniemail.php` and commit the result.
+
 ## Spam scoring
 
 Point msgpit at a SpamAssassin daemon and every captured mail gets a score, with the rules that

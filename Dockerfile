@@ -24,6 +24,7 @@ COPY providers.php bootstrap.php ./
 COPY src/ ./src/
 COPY public/ ./public/
 COPY bin/ ./bin/
+COPY data/ ./data/
 COPY docs/ ./docs/
 
 COPY docker-entrypoint.sh /usr/local/bin/

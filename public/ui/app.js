@@ -322,6 +322,68 @@ const mailPanels = {
         `;
     },
 
+    /** A ring showing how the three verdicts divide the tested clients. */
+    html: (message) => {
+        const check = message.htmlCheck;
+        const circumference = 2 * Math.PI * 54;
+        let offset = 0;
+
+        const arc = (share, className) => {
+            const length = share / 100 * circumference;
+            const segment = `<circle class="${className}" cx="64" cy="64" r="54" fill="none" stroke-width="16"
+                stroke-dasharray="${length} ${circumference - length}" stroke-dashoffset="${-offset}"></circle>`;
+            offset += length;
+
+            return segment;
+        };
+
+        const bar = (finding) => {
+            const share = (value) => (finding.tested === 0 ? 0 : value / finding.tested * 100);
+
+            return `
+                <li>
+                    <div class="finding">
+                        <span class="finding-title">${escapeHtml(finding.title)}</span>
+                        <span class="tag">${escapeHtml(finding.category)}</span>
+                        ${finding.occurrences > 1 ? `<span class="finding-count">&times;${finding.occurrences}</span>` : ''}
+                    </div>
+                    <div class="support" title="${finding.supported} yes, ${finding.partial} partial, ${finding.unsupported} no">
+                        <span class="yes" style="width:${share(finding.supported)}%"></span>
+                        <span class="partly" style="width:${share(finding.partial)}%"></span>
+                        <span class="no" style="width:${share(finding.unsupported)}%"></span>
+                    </div>
+                </li>
+            `;
+        };
+
+        return `
+            <div class="html-check">
+                <svg class="ring" viewBox="0 0 128 128" aria-hidden="true">
+                    <circle cx="64" cy="64" r="54" fill="none" stroke-width="16" class="track"></circle>
+                    ${arc(check.supported, 'yes')}${arc(check.partial, 'partly')}${arc(check.unsupported, 'no')}
+                    <text x="64" y="60" text-anchor="middle" class="ring-value">${check.supported.toFixed(1)}%</text>
+                    <text x="64" y="78" text-anchor="middle" class="ring-label">support</text>
+                </svg>
+                <ul class="legend">
+                    <li><span class="swatch yes"></span>${check.supported.toFixed(2)}% supported</li>
+                    <li><span class="swatch partly"></span>${check.partial.toFixed(2)}% partially</li>
+                    <li><span class="swatch no"></span>${check.unsupported.toFixed(2)}% not supported</li>
+                    <li class="muted">${check.tested} results across ${plural(check.features, 'feature')}</li>
+                </ul>
+            </div>
+
+            ${check.warnings.length === 0
+                ? '<p class="empty">Everything this message uses is widely supported.</p>'
+                : `<h3>${plural(check.warnings.length, 'feature')} worth checking</h3>
+                   <ul class="findings">${check.warnings.map(bar).join('')}</ul>`}
+
+            <p class="muted source">
+                Based on compatibility data from
+                <a href="https://www.caniemail.com" target="_blank" rel="noreferrer noopener">caniemail.com</a>${check.dataUpdated ? `, updated ${escapeHtml(check.dataUpdated.slice(0, 10))}` : ''}.
+            </p>
+        `;
+    },
+
     spam: (message) => {
         const spam = message.meta.spam;
         const share = Math.max(0, Math.min(1, spam.score / Math.max(spam.threshold, 0.1)));
@@ -436,6 +498,10 @@ const tabsFor = (message) => {
 
         if (attachments.length > 0) {
             tabs.push(['attachments', 'Attachments', attachments.length]);
+        }
+
+        if (message.htmlCheck) {
+            tabs.push(['html', 'HTML check', `${Math.round(message.htmlCheck.supported)}%`]);
         }
 
         if (message.meta.spam) {

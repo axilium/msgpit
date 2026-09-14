@@ -67,6 +67,23 @@ with it: no POP3, no link checking, no Outlook compatibility report.
 - Docksal projects reach it through the network aliases `mail` and `mailpit`, so the sendmail
   configuration that Docksal's cli image ships (`msmtp ... --host=mail --port=1025`) needs no change.
 
+### HTML check
+
+`Mime\HtmlCheck` scores a message's html against the caniemail data bundled at
+`data/caniemail.json` (MIT, Rémi Parmentier). It collects elements, attributes and css property
+names with `DOMDocument`, maps them to caniemail slugs (`html-table`, `css-margin`) and counts the
+verdicts per client version.
+
+- **Bundled, not fetched.** msgpit must work offline, so `bin/update-caniemail.php` refreshes the
+  file and the result is committed. Never fetch it at runtime.
+- Every feature counts once, however often it occurs: weighting by occurrence would flatter a
+  message that repeats one safe property.
+- An "unknown" verdict counts for neither side.
+- Worked out per request rather than stored, because the data is refreshed now and then and a
+  score from six months ago would be quietly wrong.
+- Tests run against a small invented dataset in `tests/fixtures/caniemail/`, so they do not move
+  when caniemail publishes new measurements. One test reads the bundled file to prove its shape.
+
 ### Spam scoring
 
 `MSGPIT_SPAMASSASSIN` (`host:port`) points at a spamd, the same spelling Mailpit uses. The protocol
