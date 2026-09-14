@@ -148,6 +148,16 @@ a grammar bundle to a project that has no build step and has to work offline.
 - Everything is escaped, text included. This is the source of a captured message, not markup we
   trust.
 
+### The source tab
+
+One tab, two views: the message as it arrived and the html the sender wrote. They were separate
+tabs, which asked the reader to know in advance which of the two held the line they were after.
+The switch that picks the view sits next to the one that changes how it is drawn, and the second
+is deliberately quieter than the first.
+
+Tab order runs from what the message is to what is wrong with it: Preview, Source, Headers, then
+the verdicts with Deliverability first, since it draws on the three behind it.
+
 ### The raw view
 
 `public/ui/rawmessage.js` lays a captured message out by structure: headers apart from bodies,

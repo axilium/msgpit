@@ -80,6 +80,7 @@ const state = {
     mailBody: 'html',
     rawView: 'structured',
     sourceView: 'formatted',
+    sourcePane: 'message',
     linkResults: {},
     // Reports with the DNS checks filled in, per message. Run when the tab is opened rather than
     // when the message is, so reading your post never waits on a resolver.
@@ -491,18 +492,6 @@ const mailPanels = {
         `;
     },
 
-    /** The html as the sender wrote it, which is not always what the preview suggests. */
-    source: (message) => `
-        <div class="body-head">
-            <div class="switch" role="group" aria-label="Source layout">
-                <button type="button" data-source="formatted" aria-pressed="${state.sourceView !== 'original'}">Formatted</button>
-                <button type="button" data-source="original" aria-pressed="${state.sourceView === 'original'}">Original</button>
-            </div>
-            <h3>HTML source</h3>
-        </div>
-        <pre class="source-html code">${renderHtmlSource(message.html ?? '', {format: state.sourceView !== 'original'})}</pre>
-    `,
-
     /**
      * Every header, not the handful the summary shows. This is where mail analysis actually
      * happens: a missing Date, a Return-Path that disagrees with From, a List-Unsubscribe that
@@ -732,18 +721,43 @@ const panels = {
         </dl>
     `,
 
-    raw: (message) => `
-        <div class="body-head">
-            ${isMail(message) ? `<div class="switch" role="group" aria-label="Raw view">
-                <button type="button" data-raw="structured" aria-pressed="${state.rawView !== 'plain'}">Structured</button>
-                <button type="button" data-raw="plain" aria-pressed="${state.rawView === 'plain'}">Plain</button>
-            </div>` : ''}
-            <h3>${isMail(message) ? 'Message as received' : 'Request as received'}</h3>
-        </div>
-        ${isMail(message) && state.rawView !== 'plain'
-            ? renderRawMessage(message.rawRequest ?? '')
-            : renderRaw(message.rawRequest ?? '')}
-    `,
+    /**
+     * What the message is made of: the message as it arrived, and the html as the sender wrote it,
+     * which is not always what the preview suggests. One tab with two views rather than two tabs,
+     * because it is one question asked twice: what is actually in here.
+     */
+    raw: (message) => {
+        if (!isMail(message)) {
+            return `<h3>Request as received</h3>${renderRaw(message.rawRequest ?? '')}`;
+        }
+
+        const html = message.html !== null;
+        const showHtml = html && state.sourcePane === 'html';
+
+        return `
+            <div class="body-head">
+                ${html ? `<div class="switch" role="group" aria-label="Source">
+                    <button type="button" data-pane="message" aria-pressed="${!showHtml}">Message</button>
+                    <button type="button" data-pane="html" aria-pressed="${showHtml}">HTML</button>
+                </div>` : ''}
+                ${showHtml
+                    ? `<div class="switch subtle" role="group" aria-label="HTML layout">
+                           <button type="button" data-source="formatted" aria-pressed="${state.sourceView !== 'original'}">Formatted</button>
+                           <button type="button" data-source="original" aria-pressed="${state.sourceView === 'original'}">Original</button>
+                       </div>`
+                    : `<div class="switch subtle" role="group" aria-label="Message layout">
+                           <button type="button" data-raw="structured" aria-pressed="${state.rawView !== 'plain'}">Structured</button>
+                           <button type="button" data-raw="plain" aria-pressed="${state.rawView === 'plain'}">Plain</button>
+                       </div>`}
+                <h3>${showHtml ? 'HTML source' : 'Message as received'}</h3>
+            </div>
+            ${showHtml
+                ? `<pre class="source-html code">${renderHtmlSource(message.html ?? '', {format: state.sourceView !== 'original'})}</pre>`
+                : (state.rawView !== 'plain'
+                    ? renderRawMessage(message.rawRequest ?? '')
+                    : renderRaw(message.rawRequest ?? ''))}
+        `;
+    },
 
     delivery: (message) => `
         <h3>Report back to the app</h3>
@@ -782,38 +796,18 @@ const verdict = (good, acceptable) => (good ? 'ok' : (acceptable ? 'warn' : 'bad
 const tabsFor = (message) => {
     const tabs = [
         ['message', isMail(message) ? 'Preview' : 'Message', null],
-        ['raw', 'Raw', null],
+        ['raw', isMail(message) ? 'Source' : 'Raw', null],
     ];
 
     if (isMail(message)) {
-        const attachments = (message.parts ?? []).filter((part) => part.disposition === 'attachment');
-
-        if (attachments.length > 0) {
-            tabs.push(['attachments', 'Attachments', attachments.length]);
-        }
-
-        if (message.html !== null) {
-            tabs.push(['source', 'HTML source', null]);
-        }
-
+        // The order walks from what the message is to what is wrong with it: what it looks like,
+        // what it is made of, and then the verdicts, with the conclusion of those first.
         tabs.push(['headers', 'Headers', Object.keys(message.headers ?? {}).length || null]);
 
-        if ((message.links ?? []).length > 0) {
-            const checked = state.linkResults[message.id];
-            const broken = checked?.filter((link) => link.status === null || link.status >= 400).length;
+        const report = state.authResults[message.id] ?? message.report;
 
-            tabs.push([
-                'links',
-                'Links',
-                checked ? `${broken}/${checked.length}` : message.links.length,
-                checked ? verdict(broken === 0, broken === 0) : null,
-            ]);
-        }
-
-        if (message.htmlCheck) {
-            const supported = message.htmlCheck.supported;
-
-            tabs.push(['html', 'HTML check', `${Math.round(supported)}%`, verdict(supported >= 90, supported >= 70)]);
+        if (report) {
+            tabs.push(['report', 'Deliverability', report.score.toFixed(1), verdict(report.score >= 8, report.score >= 6)]);
         }
 
         if (message.meta.spam) {
@@ -828,13 +822,28 @@ const tabsFor = (message) => {
             ]);
         }
 
-        // Last of the analysis tabs: it draws on all of them, so it reads as the conclusion.
-        const report = state.authResults[message.id] ?? message.report;
+        if (message.htmlCheck) {
+            const supported = message.htmlCheck.supported;
 
-        if (report) {
-            const score = report.score;
+            tabs.push(['html', 'HTML check', `${Math.round(supported)}%`, verdict(supported >= 90, supported >= 70)]);
+        }
 
-            tabs.push(['report', 'Deliverability', score.toFixed(1), verdict(score >= 8, score >= 6)]);
+        if ((message.links ?? []).length > 0) {
+            const checked = state.linkResults[message.id];
+            const broken = checked?.filter((link) => link.status === null || link.status >= 400).length;
+
+            tabs.push([
+                'links',
+                'Links',
+                checked ? `${broken}/${checked.length}` : message.links.length,
+                checked ? verdict(broken === 0, broken === 0) : null,
+            ]);
+        }
+
+        const attachments = (message.parts ?? []).filter((part) => part.disposition === 'attachment');
+
+        if (attachments.length > 0) {
+            tabs.push(['attachments', 'Attachments', attachments.length]);
         }
     }
 
@@ -940,6 +949,13 @@ const renderDetail = (message) => {
     if (state.tab === 'report') {
         loadAuthentication(message);
     }
+
+    el.detail.querySelectorAll('[data-pane]').forEach((button) => {
+        button.addEventListener('click', () => {
+            state.sourcePane = button.dataset.pane;
+            renderDetail(message);
+        });
+    });
 
     el.detail.querySelectorAll('[data-source]').forEach((button) => {
         button.addEventListener('click', () => {

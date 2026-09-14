@@ -59,15 +59,16 @@ mail analysis actually happens: a missing `Date`, a `Return-Path` that disagrees
 auto-responder will answer you. The addresses come first, the rest is alphabetical. A `Bcc` is
 visible here and nowhere else.
 
-**HTML source** is the html as the sender wrote it, which is not always what the preview suggests.
-Mail html arrives as a single line, so it is indented and coloured; **Original** shows it exactly
-as it came in.
+**Source** holds two views of what the message is made of, because it is one question asked twice.
 
-**Raw** is the message exactly as it came off the wire, laid out the way it is actually built:
+**Message** is the mail exactly as it came off the wire, laid out the way it is actually built:
 headers, boundaries, and the bodies in between. Base64 is folded away behind its size, because a
 message with an attachment contains a single line of fifteen thousand characters and no amount of
-colouring makes that readable. Open it if you want it; a **Plain** switch shows the untouched
-bytes.
+colouring makes that readable. Open it if you want it; **Plain** shows the untouched bytes.
+
+**HTML** is the html as the sender wrote it, which is not always what the preview suggests. Mail
+html arrives as a single line, so it is indented and coloured; **Original** shows it exactly as it
+came in.
 
 The headers sit above the body, and a mail that carries both an html and a plain text version
 gets a switch between them. That plain text alternative is worth checking now and then: it is what

@@ -826,6 +826,16 @@ dl.fields dd {
     overflow: hidden;
 }
 
+/* The second switch of a pair: it changes how one view is drawn, not which view you are in. */
+.switch.subtle {
+    border-color: var(--border);
+}
+
+.switch.subtle button[aria-pressed="true"] {
+    background: var(--bg-sunken);
+    color: var(--text);
+}
+
 .switch button {
     border: 0;
     border-radius: 0;
