@@ -13,11 +13,14 @@ use Msgpit\Core\Message;
 use Msgpit\Core\ProviderRegistry;
 use Msgpit\Core\RawRequest;
 use Msgpit\Core\SpamAssassin;
+use Msgpit\Core\SpamReport;
 use Msgpit\Core\Scenario;
 use Msgpit\Core\Storage;
 use Msgpit\Core\SupportsDeliveryReports;
 use Msgpit\Core\SupportsErrorScenarios;
 use Msgpit\Http\Request;
+use Msgpit\Mail\Report\Context as ReportContext;
+use Msgpit\Mail\Report\Report;
 use Msgpit\Mime\HtmlCheck;
 use Msgpit\Mime\Links;
 use Msgpit\Mime\Parser;
@@ -163,6 +166,19 @@ final readonly class Api
 
             // Listed here, but never fetched: see the link check endpoint.
             $detail['links'] = Links::find($detail['html'], $detail['text']);
+
+            // Worked out per request as well, and for the same reason: it leans on the spam score
+            // and the compatibility data, and both move underneath it.
+            /** @var array<string, mixed> $spamMeta */
+            $spamMeta = is_array($message->meta['spam'] ?? null) ? $message->meta['spam'] : [];
+
+            $detail['report'] = Report::build(new ReportContext(
+                mail: Parser::parse(RawRequest::messageFrom(str_replace("\r\n", "\n", $raw))),
+                html: $detail['html'],
+                text: $detail['text'],
+                spam: $spamMeta === [] ? null : SpamReport::fromArray($spamMeta),
+                imported: ($message->meta['imported'] ?? false) === true,
+            ))->toArray();
         }
 
         return Response::json($detail);

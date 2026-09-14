@@ -389,7 +389,72 @@ const bodyToggle = (message) => {
     </div>`;
 };
 
+const SECTIONS = {
+    spam: 'Spam filters',
+    authentication: 'Authentication',
+    content: 'Message content',
+    headers: 'Headers',
+    links: 'Links',
+};
+
+const STATUS_LABEL = {pass: 'ok', warn: 'could be better', fail: 'problem', skip: 'not applicable'};
+
+/**
+ * One finding. The evidence is what makes it usable: "no List-Unsubscribe" is an opinion, the
+ * header that was actually read is a fact, and only the second one says where to look.
+ */
+const renderFinding = (finding) => `
+    <li class="finding-row status-${escapeHtml(finding.status)}">
+        <div class="finding-head">
+            <span class="finding-mark" title="${escapeHtml(STATUS_LABEL[finding.status] ?? finding.status)}"></span>
+            <span class="finding-title">${escapeHtml(finding.title)}</span>
+            ${finding.penalty > 0 ? `<span class="finding-penalty">&minus;${finding.penalty.toFixed(1)}</span>` : ''}
+        </div>
+        ${finding.explanation ? `<p class="finding-why">${escapeHtml(finding.explanation)}</p>` : ''}
+        ${finding.evidence.length > 0
+            ? `<details class="finding-evidence">
+                   <summary>${finding.evidence.length} ${finding.evidence.length === 1 ? 'detail' : 'details'}</summary>
+                   <pre>${finding.evidence.map(escapeHtml).join('\n')}</pre>
+               </details>`
+            : ''}
+    </li>
+`;
+
 const mailPanels = {
+    /**
+     * What a receiving server is likely to hold against this message, drawn together from the
+     * other tabs. Not a prediction: real filters weigh reputation and sending history that
+     * nothing here can see.
+     */
+    report: (message) => {
+        const report = message.report;
+        const tone = verdict(report.score >= 8, report.score >= 6);
+        const sections = Object.entries(SECTIONS)
+            .map(([id, title]) => [title, report.findings.filter((finding) => finding.section === id)])
+            .filter(([, findings]) => findings.length > 0);
+
+        return `
+            <div class="score-head">
+                <div class="score score-${tone}">
+                    <strong>${report.score.toFixed(1)}</strong>
+                    <span>of ${report.max}</span>
+                </div>
+                <p>
+                    ${report.passed} of ${report.applicable} checks passed.
+                    ${report.skipped > 0
+                        ? `${report.skipped} ${report.skipped === 1 ? 'check does' : 'checks do'} not apply to this message and are left out of the score.`
+                        : ''}
+                    <br>
+                    <span class="score-caveat">Computed from the message alone. A real filter also weighs reputation and history.</span>
+                </p>
+            </div>
+            ${sections.map(([title, findings]) => `
+                <h3>${escapeHtml(title)}</h3>
+                <ul class="findings">${findings.map(renderFinding).join('')}</ul>
+            `).join('')}
+        `;
+    },
+
     message: (message) => {
         const showHtml = message.html !== null && (state.mailBody === 'html' || message.text === null);
 
@@ -736,6 +801,13 @@ const tabsFor = (message) => {
                 spam.score.toFixed(1),
                 verdict(!spam.spam && spam.score < spam.threshold / 2, !spam.spam),
             ]);
+        }
+
+        // Last of the analysis tabs: it draws on all of them, so it reads as the conclusion.
+        if (message.report) {
+            const score = message.report.score;
+
+            tabs.push(['report', 'Deliverability', score.toFixed(1), verdict(score >= 8, score >= 6)]);
         }
     }
 

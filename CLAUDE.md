@@ -148,6 +148,48 @@ attachment means a single base64 line of fifteen thousand characters, and no col
 Folding it does. A highlighter like Shiki would also mean a build step and a bundled grammar,
 which this project does not have and does not want.
 
+### Deliverability report
+
+`Mail\Report` scores a captured message out of ten: one `Check` class per question, each returning
+a `Finding` with a status, a penalty and the evidence behind it. Adding a check means one class and
+one line in `Report::CHECKS`.
+
+- **A check that cannot apply is skipped, not failed, and skipped findings are left out of the sum.**
+  A mail we caught ourselves never travelled: no sending server, no SPF result, no signature. Marking
+  every test message down for that would turn the number into noise. The UI says how many were
+  skipped and why.
+- **Authentication is read, not recomputed.** An imported `.eml` carries `Authentication-Results` and
+  `Received-SPF` from the server that really received it. That server had the sending IP and the key
+  as it was at the time; we have a file that a mail client re-encoded and a selector that may since
+  have rotated. Verifying again here fails messages that were accepted, which is worse than useless.
+- The evidence is the product, not the score. "No List-Unsubscribe" is an opinion; the headers we did
+  read are a fact, and only the second one tells you where to look. Every finding carries its own.
+- **Never present it as a prediction.** Real filters weigh reputation and sending history that
+  nothing local can see. Same caution as the spam score, for the same reason.
+- Worked out per request like the html check, never stored: it leans on the spam score and on the
+  caniemail data, and both move underneath it.
+
+### DKIM verification
+
+`Mail\Dkim` verifies a signature itself: canonicalisation, body hash and `openssl_verify` against
+the key from DNS. Written rather than pulled in, because the runtime may not require `vendor/`, and
+with explicit permission: this is the exception to "do not reimplement a package", not a precedent.
+
+- **It is the fallback, not the answer.** When a message carries `Authentication-Results`, that is
+  what the report shows. Our own verification is for a signature with no verdict attached: a `.eml`
+  out of a Sent folder, or mail caught on the way out. It answers "does my sending setup sign
+  correctly", not "was this message accepted".
+- **The body hash is checked first and gets its own reason.** It is the failure that actually
+  happens: a mail client re-encodes on export, one byte moves, and the hash is gone. Reporting that
+  as a bad signature would send someone hunting for a key problem that is not there.
+- Supports `rsa-sha256` with all four canonicalisation combinations. Everything else, `ed25519`
+  included, reports `unsupported` with the reason. Half an implementation that guesses is worse than
+  one that says what it cannot do.
+- `x=` in the past fails. A `t=` in the future and a key in test mode are notes, not verdicts:
+  neither makes a signature invalid.
+- The verifier does no DNS of its own; it takes a `KeyLookup`. That keeps the crypto testable
+  without a network and the resolver replaceable.
+
 ### Link check
 
 `Mime\Links` finds the unique urls in a message (anchors, images, css `url()`, and bare urls in the
