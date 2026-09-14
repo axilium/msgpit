@@ -88,6 +88,12 @@ final class Storage
                 value TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS cache (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                expires_at INTEGER NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS parts (
                 id TEXT PRIMARY KEY,
                 message_id TEXT NOT NULL,
@@ -104,6 +110,34 @@ final class Storage
             SQL);
 
         $this->addColumn('messages', 'read_at', 'TEXT');
+    }
+
+    /**
+     * A small cache with an expiry, shared by anything that asks the network the same question
+     * twice. It outlives the request on purpose: twenty messages from one domain then cost one
+     * lookup between them, not twenty.
+     */
+    public function cached(string $key): ?string
+    {
+        $statement = $this->pdo->prepare('SELECT value FROM cache WHERE key = :key AND expires_at > :now');
+        $statement->execute(['key' => $key, 'now' => time()]);
+        $value = $statement->fetchColumn();
+
+        return is_string($value) ? $value : null;
+    }
+
+    public function cache(string $key, string $value, int $ttl): void
+    {
+        $statement = $this->pdo->prepare(
+            'INSERT INTO cache (key, value, expires_at) VALUES (:key, :value, :expires)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at',
+        );
+        // No floor on the ttl: a caller that knows an answer is already stale should be able to say
+        // so, and an entry written into the past simply never comes back.
+        $statement->execute(['key' => $key, 'value' => $value, 'expires' => time() + $ttl]);
+
+        // Cheap enough to do inline, and it keeps a long-lived volume from collecting dead rows.
+        $this->pdo->prepare('DELETE FROM cache WHERE expires_at < :now')->execute(['now' => time() - 3600]);
     }
 
     /** Databases created before a column existed are upgraded in place. */

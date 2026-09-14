@@ -6,6 +6,8 @@ namespace Msgpit\Api;
 
 use Msgpit\Core\DeliveryStatus;
 use Msgpit\Core\Docs;
+use Msgpit\Core\Dns;
+use Msgpit\Core\Resolver;
 use Msgpit\Core\DlrDispatcher;
 use Msgpit\Core\LinkChecker;
 use Msgpit\Core\MailCapture;
@@ -101,6 +103,10 @@ final readonly class Api
             return $this->sendDeliveryReport($matches[1], $request);
         }
 
+        if (preg_match('#^/messages/([^/]+)/authentication$#', $path, $matches) === 1 && $request->method === 'POST') {
+            return $this->checkAuthentication($matches[1]);
+        }
+
         if (preg_match('#^/messages/([^/]+)/links$#', $path, $matches) === 1 && $request->method === 'POST') {
             return $this->checkLinks($matches[1]);
         }
@@ -169,19 +175,52 @@ final readonly class Api
 
             // Worked out per request as well, and for the same reason: it leans on the spam score
             // and the compatibility data, and both move underneath it.
-            /** @var array<string, mixed> $spamMeta */
-            $spamMeta = is_array($message->meta['spam'] ?? null) ? $message->meta['spam'] : [];
-
-            $detail['report'] = Report::build(new ReportContext(
-                mail: Parser::parse(RawRequest::messageFrom(str_replace("\r\n", "\n", $raw))),
-                html: $detail['html'],
-                text: $detail['text'],
-                spam: $spamMeta === [] ? null : SpamReport::fromArray($spamMeta),
-                imported: ($message->meta['imported'] ?? false) === true,
-            ))->toArray();
+            $detail['report'] = $this->report($message, $detail['html'], $detail['text'])->toArray();
         }
 
         return Response::json($detail);
+    }
+
+    private function report(Message $message, ?string $html, ?string $text, ?Resolver $dns = null): Report
+    {
+        /** @var array<string, mixed> $spamMeta */
+        $spamMeta = is_array($message->meta['spam'] ?? null) ? $message->meta['spam'] : [];
+        $raw = $this->storage->rawRequest($message->id) ?? '';
+
+        $context = new ReportContext(
+            mail: Parser::parse(RawRequest::messageFrom(str_replace("\r\n", "\n", $raw))),
+            html: $html,
+            text: $text,
+            spam: $spamMeta === [] ? null : SpamReport::fromArray($spamMeta),
+            imported: ($message->meta['imported'] ?? false) === true,
+            dns: $dns,
+        );
+
+        return Report::build($context, $dns === null ? null : Report::withNetwork());
+    }
+
+    /**
+     * The checks that ask DNS, on request only. Opening a message must not wait on a resolver, and
+     * this is a second way out of the development network next to callbacks and the link check.
+     */
+    private function checkAuthentication(string $id): Response
+    {
+        $message = $this->storage->find($id);
+        $parts = $message === null ? [] : $this->storage->parts($id);
+
+        if ($message === null || $parts === []) {
+            return Response::json(['error' => 'Message not found.'], 404);
+        }
+
+        $dns = Dns::fromEnvironment($this->storage);
+
+        if (!$dns->enabled()) {
+            return Response::json(['error' => 'DNS lookups are switched off with MSGPIT_DNS.'], 409);
+        }
+
+        $report = $this->report($message, $this->body($id, $parts, 'text/html'), $this->body($id, $parts, 'text/plain'), $dns);
+
+        return Response::json(['report' => $report->toArray(), 'lookups' => $dns->lookups()]);
     }
 
     /**

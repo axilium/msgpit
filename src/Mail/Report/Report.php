@@ -38,8 +38,32 @@ final readonly class Report
         Checks\UrlShorteners::class,
     ];
 
+    /**
+     * Everything that needs DNS. Kept apart because opening a message must never wait on the
+     * network: a resolver that is slow or gone would make reading your own post slow or gone.
+     *
+     * @var list<class-string<Check>>
+     */
+    public const NETWORK_CHECKS = [
+        Checks\Spf::class,
+        Checks\DkimSignature::class,
+        Checks\DmarcPolicy::class,
+        Checks\ReverseDns::class,
+    ];
+
     /** @param list<Finding> $findings */
     public function __construct(public array $findings) {}
+
+    /** @return list<class-string<Check>> */
+    public static function withNetwork(): array
+    {
+        $checks = self::CHECKS;
+
+        // Right behind the header verdict they extend, rather than appended at the end.
+        array_splice($checks, 2, 0, self::NETWORK_CHECKS);
+
+        return $checks;
+    }
 
     /** @param list<class-string<Check>>|null $checks */
     public static function build(Context $context, ?array $checks = null): self

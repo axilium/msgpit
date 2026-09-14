@@ -81,6 +81,8 @@ const state = {
     rawView: 'structured',
     sourceView: 'formatted',
     linkResults: {},
+    // Reports with the DNS checks filled in, per message: they are only run when asked for.
+    authResults: {},
     checkingLinks: false,
     endpoints: {providers: [], smtp: null},
     scenarios: [],
@@ -427,7 +429,7 @@ const mailPanels = {
      * nothing here can see.
      */
     report: (message) => {
-        const report = message.report;
+        const report = state.authResults[message.id] ?? message.report;
         const tone = verdict(report.score >= 8, report.score >= 6);
         const sections = Object.entries(SECTIONS)
             .map(([id, title]) => [title, report.findings.filter((finding) => finding.section === id)])
@@ -450,6 +452,13 @@ const mailPanels = {
             </div>
             ${sections.map(([title, findings]) => `
                 <h3>${escapeHtml(title)}</h3>
+                ${title === SECTIONS.authentication && !state.authResults[message.id] ? `
+                    <p class="check-prompt">
+                        SPF, DKIM, DMARC and reverse DNS are read from the sender's own zone, so this
+                        asks DNS. Nothing leaves the network beyond those lookups.
+                        <button type="button" class="ghost" data-authentication="${escapeHtml(message.id)}">Look them up</button>
+                    </p>
+                ` : ''}
                 <ul class="findings">${findings.map(renderFinding).join('')}</ul>
             `).join('')}
         `;
@@ -584,10 +593,15 @@ const mailPanels = {
         const circumference = 2 * Math.PI * 54;
         let offset = 0;
 
+        // A hair of track between the segments: three arcs meeting edge to edge read as one shape
+        // however far apart their colours are.
+        const gap = circumference * 0.006;
+
         const arc = (share, className) => {
             const length = share / 100 * circumference;
+            const drawn = Math.max(0, length - gap);
             const segment = `<circle class="${className}" cx="64" cy="64" r="54" fill="none" stroke-width="16"
-                stroke-dasharray="${length} ${circumference - length}" stroke-dashoffset="${-offset}"></circle>`;
+                stroke-dasharray="${drawn} ${circumference - drawn}" stroke-dashoffset="${-offset}"></circle>`;
             offset += length;
 
             return segment;
@@ -804,8 +818,10 @@ const tabsFor = (message) => {
         }
 
         // Last of the analysis tabs: it draws on all of them, so it reads as the conclusion.
-        if (message.report) {
-            const score = message.report.score;
+        const report = state.authResults[message.id] ?? message.report;
+
+        if (report) {
+            const score = report.score;
 
             tabs.push(['report', 'Deliverability', score.toFixed(1), verdict(score >= 8, score >= 6)]);
         }
@@ -878,6 +894,24 @@ const renderDetail = (message) => {
             state.checkingLinks = false;
             renderDetail(message);
         }
+    });
+
+    el.detail.querySelector('[data-authentication]')?.addEventListener('click', async (event) => {
+        const button = event.currentTarget;
+
+        button.disabled = true;
+        button.textContent = 'Looking up...';
+
+        try {
+            const {report} = await api(`/messages/${message.id}/authentication`, {method: 'POST'});
+            state.authResults = {...state.authResults, [message.id]: report};
+        } catch {
+            button.textContent = 'That did not work';
+
+            return;
+        }
+
+        renderDetail(message);
     });
 
     el.detail.querySelectorAll('[data-source]').forEach((button) => {

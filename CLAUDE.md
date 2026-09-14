@@ -14,8 +14,9 @@ everything in a web UI.
 
 ## Non-goals
 
-- No real delivery, ever. msgpit makes outbound HTTP in exactly two cases: delivery-report
-  callbacks to the app, and the link check, which only runs when someone presses the button.
+- No real delivery, ever. msgpit reaches outside in exactly three cases: delivery-report callbacks
+  to the app, the link check, and the DNS lookups behind the authentication checks. The last two
+  only run when someone presses the button.
 - No credential validation (only check that auth has the right *shape*).
 - No inbound messages, no multi-user, no auth on the UI, no persistence guarantees.
 - No full API coverage per provider: only the endpoints our apps actually use.
@@ -190,6 +191,29 @@ with explicit permission: this is the exception to "do not reimplement a package
 - The verifier does no DNS of its own; it takes a `KeyLookup`. That keeps the crypto testable
   without a network and the resolver replaceable.
 
+### DNS
+
+`Core\Dns` is the only place msgpit asks the network something that is not an http request, and it
+exists because SPF, DMARC and DKIM cannot be judged without it: the answer lives in the sender's
+zone and nowhere else.
+
+- **Behind a button, never on the path of opening a message.** A resolver that is slow or gone would
+  make reading your own post slow or gone.
+- `MSGPIT_DNS=off` switches it off; the checks then report as not applicable, which is a supported
+  way to work and not a failure.
+- Answers are cached with the TTL of the record, in the generic `cache` table. It outlives the
+  request on purpose: twenty messages from one domain then cost one lookup between them.
+- **The names come out of a captured message, so a sender chooses them.** Anything that walks a
+  chain of them has to cap how far it follows; SPF's ten-lookup limit is that cap, and it is a
+  safety measure rather than a detail of the spec.
+- `dns_get_record()` cannot be pointed at a specific nameserver, whatever it looks like: `$authns`
+  is an output. Aiming at an authoritative server would mean writing a resolver over UDP, and
+  measured lookups run at 17 to 56 ms through the container's resolver, so the win is in the cache.
+- DMARC needs the organisational domain. RFC 7489 says to find it with the public suffix list; we
+  walk up a label at a time and stop while two are left. Same record for every real zone, a lookup
+  or two more, and no 200 kB list to keep fresh. The case it gets wrong is a public suffix that
+  publishes DMARC of its own, and none do.
+
 ### Link check
 
 `Mime\Links` finds the unique urls in a message (anchors, images, css `url()`, and bare urls in the
@@ -343,6 +367,7 @@ Providers are pure translators: parse request, validate required fields and auth
 | `GET /api/messages/{id}` | Message detail incl. raw request and DLR history |
 | `DELETE /api/messages` | Clear all |
 | `POST /api/messages/import` | Import a raw `.eml` (body is the file) |
+| `POST /api/messages/{id}/authentication` | Run the DNS checks. Asks DNS |
 | `POST /api/messages/{id}/read` | Mark one message read |
 | `POST /api/messages/read` | Mark everything read |
 | `POST /api/messages/{id}/dlr` | `{"status":"delivered"}` send delivery report |
@@ -367,6 +392,7 @@ was sent, then clear).
 | `MSGPIT_<PROVIDER>_DLR_URL` | - | Callback URL for delivery reports, e.g. `http://web/sms-status.php` |
 | `MSGPIT_<PROVIDER>_DLR_HEADER` | - | Header name authenticating that callback |
 | `MSGPIT_<PROVIDER>_DLR_SECRET` | - | Its value. Both or neither |
+| `MSGPIT_DNS` | on | `off` disables every DNS lookup, for working offline |
 
 ## Adding a provider (checklist)
 

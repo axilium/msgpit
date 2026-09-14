@@ -247,4 +247,28 @@ final class StorageTest extends TestCase
 
         self::assertSame(Scenario::ServerError, $this->storage->consumeScenario());
     }
+
+    public function testTheCacheReturnsWhatWasPutIn(): void
+    {
+        $this->storage->cache('dns:txt:example.test', '["v=spf1 -all"]', 300);
+
+        self::assertSame('["v=spf1 -all"]', $this->storage->cached('dns:txt:example.test'));
+        self::assertNull($this->storage->cached('dns:txt:other.test'));
+    }
+
+    /** An answer past its TTL is gone, or a record that changed would never be seen to change. */
+    public function testAnExpiredEntryIsNotReturned(): void
+    {
+        $this->storage->cache('dns:txt:example.test', 'oud', -1);
+
+        self::assertNull($this->storage->cached('dns:txt:example.test'));
+    }
+
+    public function testWritingTheSameKeyTwiceReplacesIt(): void
+    {
+        $this->storage->cache('dns:txt:example.test', 'eerst', 300);
+        $this->storage->cache('dns:txt:example.test', 'daarna', 300);
+
+        self::assertSame('daarna', $this->storage->cached('dns:txt:example.test'));
+    }
 }

@@ -31,8 +31,8 @@ final readonly class Authentication implements Check
             return Finding::skip(
                 'authentication',
                 Section::Authentication,
-                'SPF, DKIM and DMARC',
-                'This message never left the machine, so no server judged it. Import a delivered .eml to see this.',
+                'No receiving server judged this message',
+                'It never left the machine. Import a delivered .eml to see what a real server made of it.',
             );
         }
 

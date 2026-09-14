@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Msgpit\Mail\Report;
 
 use DOMDocument;
+use Msgpit\Core\Resolver;
 use Msgpit\Core\SpamReport;
 use Msgpit\Mime\ParsedMessage;
 
@@ -15,13 +16,25 @@ final class Context
 
     private bool $parsed = false;
 
+    /** Present only when the network checks were asked for: they are never part of opening a message. */
+    public readonly Origin $origin;
+
     public function __construct(
         public readonly ParsedMessage $mail,
         public readonly ?string $html,
         public readonly ?string $text,
         public readonly ?SpamReport $spam = null,
         public readonly bool $imported = false,
-    ) {}
+        public readonly ?Resolver $dns = null,
+    ) {
+        $this->origin = Origin::fromRaw($mail->raw);
+    }
+
+    /** The domain the reader sees, which is the one DMARC holds everything against. */
+    public function fromDomain(): ?string
+    {
+        return self::domainOf($this->header('from'));
+    }
 
     public function header(string $name): ?string
     {

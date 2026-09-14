@@ -20,6 +20,12 @@
     --warn: #8a4209;
     --warn-soft: #fce7b5;
 
+    /* Charts need hues that stay apart as a filled shape. The text colours above are dark enough
+       to read on a light background, which makes the amber one brown and puts it next to the red. */
+    --chart-ok: #1a9e4b;
+    --chart-warn: #f59e0b;
+    --chart-bad: #dc2626;
+
     /* The top bar is dark in both themes, so the workspace reads as the lighter surface.
        Dark grey-blue rather than near-black: heavy enough to read as a bar, not as ink. */
     --topbar-bg: #242c37;
@@ -60,6 +66,10 @@
         --danger-soft: #3f1c1c;
         --warn: #f0b849;
         --warn-soft: #40320f;
+
+        --chart-ok: #34d399;
+        --chart-warn: #fbbf24;
+        --chart-bad: #f87171;
     }
 }
 
@@ -1057,9 +1067,9 @@ pre.source-html {
 }
 
 .ring .track { stroke: var(--bg-sunken); }
-.ring .yes { stroke: var(--ok); }
-.ring .partly { stroke: var(--warn); }
-.ring .no { stroke: var(--danger); }
+.ring .yes { stroke: var(--chart-ok); }
+.ring .partly { stroke: var(--chart-warn); }
+.ring .no { stroke: var(--chart-bad); }
 
 .ring text {
     transform: rotate(90deg);
@@ -1105,9 +1115,9 @@ p.muted {
     flex: none;
 }
 
-.swatch.yes { background: var(--ok); }
-.swatch.partly { background: var(--warn); }
-.swatch.no { background: var(--danger); }
+.swatch.yes { background: var(--chart-ok); }
+.swatch.partly { background: var(--chart-warn); }
+.swatch.no { background: var(--chart-bad); }
 
 .findings {
     margin: 0;
@@ -1145,9 +1155,9 @@ p.muted {
     background: var(--bg-sunken);
 }
 
-.support .yes { background: var(--ok); }
-.support .partly { background: var(--warn); }
-.support .no { background: var(--danger); }
+.support .yes { background: var(--chart-ok); }
+.support .partly { background: var(--chart-warn); }
+.support .no { background: var(--chart-bad); }
 
 p.source {
     margin-top: 18px;
@@ -1719,4 +1729,23 @@ pre {
     line-height: 1.6;
     white-space: pre-wrap;
     word-break: break-word;
+}
+
+/* The one place the report reaches outside, so it says so before it does. */
+.check-prompt {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 8px;
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    background: var(--bg-sunken);
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text-soft);
+}
+
+.check-prompt button {
+    flex: none;
+    margin-left: auto;
 }

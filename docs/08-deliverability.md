@@ -50,6 +50,28 @@ from bulk senders and which transactional mail needs neither of.
 **Links.** Anchor text that names one domain while the link opens another, which is the shape of a
 phishing message whatever the reason for it here. Url shorteners, which hide the destination.
 
+## The checks that ask DNS
+
+SPF, DKIM, DMARC and reverse DNS cannot be answered from the message alone: the answer lives in the
+sender's own zone. Those four sit behind a button, for two reasons. Opening a message should never
+wait on a resolver, and this is a second way out of the development network next to delivery-report
+callbacks and the link check. `MSGPIT_DNS=off` switches it off entirely, and the checks then report
+as not applicable rather than failing.
+
+What you get depends again on the message. A delivered `.eml` names the sending address in its
+`Received` headers, so SPF can be evaluated against it for a real verdict and the reverse lookup has
+something to look up. A mail caught locally has no address, but the sender's domain still publishes
+an SPF record and a DMARC policy or it does not, and that half of the setup is the half you control
+from here. It is reported rather than evaluated, and says so.
+
+DKIM is verified here only when nothing else has: a signature with no `Authentication-Results`
+beside it, which is what a `.eml` from a Sent folder looks like. A failing body hash is reported as
+its own thing, because a mail client that re-encoded the message on export is a far likelier cause
+than a bad key.
+
+Answers are cached with the TTL the record carries, so twenty messages from one domain cost one
+lookup between them.
+
 ## Evidence
 
 Every finding can be expanded to the thing it was based on: the SpamAssassin rules with their points,
