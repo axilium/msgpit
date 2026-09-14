@@ -60,6 +60,8 @@ auto-responder will answer you. The addresses come first, the rest is alphabetic
 visible here and nowhere else.
 
 **HTML source** is the html as the sender wrote it, which is not always what the preview suggests.
+Mail html arrives as a single line, so it is indented and coloured; **Original** shows it exactly
+as it came in.
 
 **Raw** is the message exactly as it came off the wire, laid out the way it is actually built:
 headers, boundaries, and the bodies in between. Base64 is folded away behind its size, because a

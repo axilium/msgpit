@@ -908,8 +908,22 @@ table.headers td {
 
 pre.source-html {
     max-height: 60vh;
-    white-space: pre-wrap;
-    word-break: break-word;
+    white-space: pre;
+    overflow: auto;
+    overscroll-behavior: contain;
+    tab-size: 2;
+}
+
+.code .tok-tag { color: #0550ae; }
+.code .tok-attr { color: #8250df; }
+.code .tok-value { color: #0a7c42; }
+.code .tok-comment { color: var(--text-faint); font-style: italic; }
+.code .tok-doctype { color: var(--text-faint); }
+
+@media (prefers-color-scheme: dark) {
+    .code .tok-tag { color: #79c0ff; }
+    .code .tok-attr { color: #d2a8ff; }
+    .code .tok-value { color: #7ee2a8; }
 }
 
 /* Link check */

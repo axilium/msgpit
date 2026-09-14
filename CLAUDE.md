@@ -96,6 +96,20 @@ Mail analysis lives here, so do not trim the list: a missing `Date`, a `Return-P
 disagrees with `From`, an `Auto-Submitted` that stops an auto-responder. A `Bcc` is visible here
 and nowhere else.
 
+### The html source view
+
+`public/ui/htmlsource.js` indents and colours the html of a message. A tokenizer, not a syntax
+highlighting library: it is one language, and Shiki would bring a bundler, a WASM regex engine and
+a grammar bundle to a project that has no build step and has to work offline.
+
+- Indentation is the larger half of the job. Mail html arrives as one line.
+- Block elements get their own line and open a level; inline elements stay in the text, because
+  breaking those apart changes how a sentence reads.
+- Build the coloured tag from its parts, never by chaining replaces over the escaped string: the
+  second pass then matches the class attribute of the span the first pass inserted.
+- Everything is escaped, text included. This is the source of a captured message, not markup we
+  trust.
+
 ### The raw view
 
 `public/ui/rawmessage.js` lays a captured message out by structure: headers apart from bodies,

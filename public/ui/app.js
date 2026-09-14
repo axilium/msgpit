@@ -1,5 +1,6 @@
 import {renderMarkdown} from '/ui/markdown.js';
 import {renderRawMessage} from '/ui/rawmessage.js';
+import {renderHtmlSource} from '/ui/htmlsource.js';
 
 const FALLBACK_POLL_MS = 2000;
 
@@ -70,6 +71,7 @@ const state = {
     doc: null,
     mailBody: 'html',
     rawView: 'structured',
+    sourceView: 'formatted',
     linkResults: {},
     checkingLinks: false,
     endpoints: {providers: [], smtp: null},
@@ -390,8 +392,14 @@ const mailPanels = {
 
     /** The html as the sender wrote it, which is not always what the preview suggests. */
     source: (message) => `
-        <h3>HTML source</h3>
-        <pre class="source-html">${escapeHtml(message.html ?? '')}</pre>
+        <div class="body-head">
+            <div class="switch" role="group" aria-label="Source layout">
+                <button type="button" data-source="formatted" aria-pressed="${state.sourceView !== 'original'}">Formatted</button>
+                <button type="button" data-source="original" aria-pressed="${state.sourceView === 'original'}">Original</button>
+            </div>
+            <h3>HTML source</h3>
+        </div>
+        <pre class="source-html code">${renderHtmlSource(message.html ?? '', {format: state.sourceView !== 'original'})}</pre>
     `,
 
     /**
@@ -775,6 +783,13 @@ const renderDetail = (message) => {
             state.checkingLinks = false;
             renderDetail(message);
         }
+    });
+
+    el.detail.querySelectorAll('[data-source]').forEach((button) => {
+        button.addEventListener('click', () => {
+            state.sourceView = button.dataset.source;
+            renderDetail(message);
+        });
     });
 
     el.detail.querySelectorAll('[data-raw]').forEach((button) => {

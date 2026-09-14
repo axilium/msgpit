@@ -27,7 +27,7 @@
             "@test:shell"
         ],
         "test:php": "phpunit",
-        "test:js": "node --test tests/Js/markdown.test.mjs tests/Js/rawmessage.test.mjs",
+        "test:js": "node --test tests/Js/markdown.test.mjs tests/Js/rawmessage.test.mjs tests/Js/htmlsource.test.mjs",
         "test:shell": "bash tests/Shell/next-version.test.sh",
         "stan": "phpstan analyse"
     },
