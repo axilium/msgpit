@@ -32,7 +32,7 @@ As a Docksal service, add to `.docksal/docksal.yml`:
 services:
   msgpit:
     hostname: msgpit
-    image: ${MSGPIT_IMAGE:-ghcr.io/raymondsteffann/msgpit:1}
+    image: ${MSGPIT_IMAGE:-ghcr.io/axilium/msgpit:1}
     volumes:
       - msgpit_data:/data
     labels:
@@ -51,13 +51,13 @@ volumes:
 Or plain Docker:
 
 ```bash
-docker run -p 8080:8080 -v msgpit_data:/data ghcr.io/raymondsteffann/msgpit:1
+docker run -p 8080:8080 -v msgpit_data:/data ghcr.io/axilium/msgpit:1
 ```
 
 The UI is on port 8080. Other containers reach the API at `http://msgpit:8080`.
 
 Pin the major tag (`:1`). Breaking changes to routes or the `/api` contract get a major bump. To
-try a development build in one project, set `MSGPIT_IMAGE=ghcr.io/raymondsteffann/msgpit:dev` in
+try a development build in one project, set `MSGPIT_IMAGE=ghcr.io/axilium/msgpit:dev` in
 `.docksal/docksal-local.env`.
 
 ## Documentation
@@ -141,7 +141,7 @@ fin exec composer stan  # PHPStan, level max
 Every push to `main` publishes a release. The version comes from the conventional commits since
 the last tag: a breaking change bumps major, a `feat:` bumps minor, anything else bumps patch. The
 workflow tags the commit, creates the GitHub release and pushes `X.Y.Z`, `X.Y`, `X` and `latest`
-to `ghcr.io/raymondsteffann/msgpit` for amd64 and arm64.
+to `ghcr.io/axilium/msgpit` for amd64 and arm64.
 
 Pushes to `dev` publish `:dev` and `:dev-<sha>` without tagging or releasing anything, so a
 project can try a build before it lands.

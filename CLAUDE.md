@@ -474,7 +474,7 @@ Manual testing: send requests with curl from the `cli` container to `http://msgp
 
 ## Release
 
-Image: `ghcr.io/raymondsteffann/msgpit`, built for amd64 and arm64.
+Image: `ghcr.io/axilium/msgpit`, built for amd64 and arm64.
 
 - **Every push to `main` releases.** `.github/next-version.sh` derives the version from the
   conventional commits since the last `v*` tag: a breaking change (`!` or `BREAKING CHANGE`) bumps
