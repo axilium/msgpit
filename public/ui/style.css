@@ -749,6 +749,89 @@ dl.fields dd {
     white-space: nowrap;
 }
 
+/* The raw message, laid out by structure */
+
+.raw-message {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-sunken);
+    padding: 12px 14px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    line-height: 1.65;
+    overflow-x: auto;
+}
+
+.raw-line {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.raw-name {
+    color: var(--accent);
+}
+
+/* A continuation line of a folded header. */
+.raw-folded {
+    padding-left: 16px;
+    color: var(--text-soft);
+}
+
+.raw-blank {
+    height: 8px;
+}
+
+.raw-boundary {
+    margin: 10px 0 6px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+    display: inline-block;
+}
+
+/* Fifteen thousand characters of base64 tell you nothing until you ask for them. */
+.blob {
+    margin: 2px 0;
+}
+
+.blob summary {
+    cursor: pointer;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 3px 6px;
+    border-radius: 4px;
+    background: var(--bg-hover);
+    color: var(--text-soft);
+}
+
+.blob summary::marker {
+    color: var(--text-faint);
+}
+
+.blob-preview {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.blob-size {
+    margin-left: auto;
+    color: var(--text-faint);
+    white-space: nowrap;
+}
+
+.blob pre {
+    margin: 4px 0 0;
+    max-height: 260px;
+    overflow: auto;
+    word-break: break-all;
+    white-space: pre-wrap;
+    font-size: 11px;
+}
+
 /* Link check */
 
 .notice {

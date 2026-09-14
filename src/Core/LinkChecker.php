@@ -37,9 +37,29 @@ final readonly class LinkChecker
         return $results;
     }
 
+    /**
+     * Link-local addresses, which is where cloud metadata services live: 169.254.169.254 and
+     * friends hand out credentials to anything that asks. No mail has a legitimate reason to
+     * point there, so it is refused even though the rest of the private network is allowed.
+     */
+    private const REFUSED_HOSTS = [
+        '/^169\.254\./',
+        '/^\[?fe80:/i',
+        '/^\[?fd00:ec2::254\]?$/i',
+        '/^metadata\.google\.internal$/i',
+    ];
+
     /** @return array{status: ?int, reason: ?string, redirect: ?string} */
     private function probe(string $url): array
     {
+        $host = parse_url($url, PHP_URL_HOST);
+
+        // Everything else on the private network is fair game: checking that a template built the
+        // right url for http://web is one of the reasons this exists at all.
+        if (is_string($host) && self::isRefused($host)) {
+            return ['status' => null, 'reason' => 'Refused: link-local address', 'redirect' => null];
+        }
+
         $result = $this->request($url, 'HEAD');
 
         // Plenty of servers refuse HEAD but answer GET perfectly well.
@@ -92,6 +112,17 @@ final readonly class LinkChecker
             'reason' => null,
             'redirect' => self::header($headers, 'location'),
         ];
+    }
+
+    private static function isRefused(string $host): bool
+    {
+        foreach (self::REFUSED_HOSTS as $pattern) {
+            if (preg_match($pattern, $host) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** @param list<string> $headers */

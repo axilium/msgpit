@@ -85,6 +85,16 @@ verdicts per client version.
 - Tests run against a small invented dataset in `tests/fixtures/caniemail/`, so they do not move
   when caniemail publishes new measurements. One test reads the bundled file to prove its shape.
 
+### The raw view
+
+`public/ui/rawmessage.js` lays a captured message out by structure: headers apart from bodies,
+boundaries marked, base64 folded behind its size.
+
+Deliberately not a syntax highlighter. The problem with a raw message is not syntax but shape: one
+attachment means a single base64 line of fifteen thousand characters, and no colouring fixes that.
+Folding it does. A highlighter like Shiki would also mean a build step and a bundled grammar,
+which this project does not have and does not want.
+
 ### Link check
 
 `Mime\Links` finds the unique urls in a message (anchors, images, css `url()`, and bare urls in the

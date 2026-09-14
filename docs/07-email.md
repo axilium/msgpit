@@ -53,7 +53,11 @@ goes to anyone reading mail without html, and it is the one people forget to kee
 **Attachments** lists what was attached, with its type and size, and lets you download it.
 Filenames with accents survive.
 
-**Raw** is the message exactly as it came off the wire, headers and encodings included.
+**Raw** is the message exactly as it came off the wire, laid out the way it is actually built:
+headers, boundaries, and the bodies in between. Base64 is folded away behind its size, because a
+message with an attachment contains a single line of fifteen thousand characters and no amount of
+colouring makes that readable. Open it if you want it; a **Plain** switch shows the untouched
+bytes.
 
 The headers sit above the body, and a mail that carries both an html and a plain text version
 gets a switch between them. That plain text alternative is worth checking now and then: it is what

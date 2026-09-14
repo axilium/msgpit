@@ -1,4 +1,5 @@
 import {renderMarkdown} from '/ui/markdown.js';
+import {renderRawMessage} from '/ui/rawmessage.js';
 
 const FALLBACK_POLL_MS = 2000;
 const SEGMENT_LIMITS = {'GSM-7': {single: 160, concatenated: 153}, 'UCS-2': {single: 70, concatenated: 67}};
@@ -38,6 +39,7 @@ const state = {
     touched: false,
     doc: null,
     mailBody: 'html',
+    rawView: 'structured',
     linkResults: {},
     checkingLinks: false,
     scenarios: [],
@@ -512,8 +514,16 @@ const panels = {
     `,
 
     raw: (message) => `
-        <h3>Request as received</h3>
-        ${renderRaw(message.rawRequest ?? '')}
+        <div class="body-head">
+            <h3>${isMail(message) ? 'Message as received' : 'Request as received'}</h3>
+            ${isMail(message) ? `<div class="switch" role="group" aria-label="Raw view">
+                <button type="button" data-raw="structured" aria-pressed="${state.rawView !== 'plain'}">Structured</button>
+                <button type="button" data-raw="plain" aria-pressed="${state.rawView === 'plain'}">Plain</button>
+            </div>` : ''}
+        </div>
+        ${isMail(message) && state.rawView !== 'plain'
+            ? renderRawMessage(message.rawRequest ?? '')
+            : renderRaw(message.rawRequest ?? '')}
     `,
 
     delivery: (message) => `
@@ -652,6 +662,13 @@ const renderDetail = (message) => {
             state.checkingLinks = false;
             renderDetail(message);
         }
+    });
+
+    el.detail.querySelectorAll('[data-raw]').forEach((button) => {
+        button.addEventListener('click', () => {
+            state.rawView = button.dataset.raw;
+            renderDetail(message);
+        });
     });
 
     el.detail.querySelectorAll('[data-body]').forEach((button) => {

@@ -139,6 +139,33 @@ final class LinksTest extends TestCase
         self::assertCount(3, $results, 'A message with hundreds of links should not hang the request');
     }
 
+    /**
+     * Cloud metadata services hand out credentials to anything that asks, and no mail has a
+     * reason to link there. The rest of the private network stays reachable on purpose.
+     */
+    public function testLinkLocalAddressesAreRefused(): void
+    {
+        $results = (new LinkChecker(timeout: 1))->check([
+            ['url' => 'http://169.254.169.254/latest/meta-data/', 'kind' => 'link'],
+            ['url' => 'http://metadata.google.internal/computeMetadata/v1/', 'kind' => 'link'],
+        ]);
+
+        foreach ($results as $result) {
+            self::assertNull($result['status']);
+            self::assertSame('Refused: link-local address', $result['reason']);
+        }
+    }
+
+    public function testAnOrdinaryPrivateAddressIsStillChecked(): void
+    {
+        // Nothing listens there, so it fails to connect rather than being refused outright.
+        $results = (new LinkChecker(timeout: 1))->check([
+            ['url' => 'http://192.168.255.254:1/pad', 'kind' => 'link'],
+        ]);
+
+        self::assertSame('Could not connect', $results[0]['reason']);
+    }
+
     public function testCheckingNothingIsNotAnError(): void
     {
         self::assertSame([], (new LinkChecker())->check([]));
