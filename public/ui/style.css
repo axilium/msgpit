@@ -1791,3 +1791,29 @@ pre {
     flex: none;
     margin-left: auto;
 }
+
+/*
+ * The interface is furniture and the message is the content, so only the content can be selected.
+ * Dragging across a list of messages used to leave half of them highlighted, which looks broken
+ * and never helps: nobody wants to copy a menu.
+ *
+ * Everything that is a dump or the message itself gets selection back: the raw message, the html
+ * source, the meta json, header values, the evidence under a finding, the plain text body and the
+ * reference pages. The preview iframe is a document of its own and was never covered by this.
+ */
+body {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+pre,
+code,
+input,
+textarea,
+.body-text,
+.header-value,
+.raw-message,
+.docs {
+    user-select: text;
+    -webkit-user-select: text;
+}
