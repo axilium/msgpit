@@ -101,6 +101,77 @@ final class MailApiTest extends TestCase
         self::assertArrayNotHasKey('parts', $decoded);
     }
 
+    /**
+     * Mail analysis lives in the headers: a missing Date, a Return-Path that disagrees with From,
+     * a List-Unsubscribe that never made it in. So all of them come back, not the handful the
+     * summary keeps.
+     */
+    public function testEveryHeaderComesBack(): void
+    {
+        $raw = implode("\r\n", [
+            'Return-Path: <bounce@example.test>',
+            'From: Sender <sender@example.test>',
+            'To: raymond@example.test',
+            'Bcc: logs@example.test',
+            'Subject: Met veel headers',
+            'Date: Mon, 14 Sep 2026 11:00:00 +0200',
+            'List-Unsubscribe: <mailto:uit@example.test>',
+            'Auto-Submitted: auto-generated',
+            'X-Mailer: msgpit test',
+            'Content-Type: text/plain; charset=utf-8',
+            '',
+            'Tekst.',
+        ]);
+
+        (new MailCapture($this->storage))->capture(new Envelope('bounce@example.test', ['raymond@example.test'], $raw));
+
+        $headers = $this->json('/messages/' . $this->storage->all()[0]->id)['headers'];
+
+        self::assertIsArray($headers);
+
+        foreach (['return-path', 'from', 'to', 'bcc', 'subject', 'date', 'list-unsubscribe', 'auto-submitted', 'x-mailer'] as $name) {
+            self::assertArrayHasKey($name, $headers, "{$name} should be reported");
+        }
+
+        self::assertSame('logs@example.test', $headers['bcc'], 'A Bcc is only visible here');
+    }
+
+    public function testHeaderNamesAreLowercasedAndValuesDecoded(): void
+    {
+        $id = $this->receive('folded-subject.eml');
+        $headers = $this->json("/messages/{$id}")['headers'];
+
+        self::assertIsArray($headers);
+        self::assertArrayHasKey('subject', $headers);
+
+        $subject = $headers['subject'];
+
+        self::assertIsString($subject);
+        self::assertStringContainsString('—', $subject, 'Encoded words are decoded');
+        self::assertStringNotContainsString('=?utf-8?', $subject);
+    }
+
+    /** An SMS has no headers to report, and should not grow an empty field for them. */
+    public function testANonMailMessageHasNoHeaders(): void
+    {
+        $storage = new Storage(new PDO('sqlite::memory:'));
+        $api = new Api($storage, new ProviderRegistry([]), new DlrDispatcher($storage), new Docs(dirname(__DIR__, 2) . '/docs'));
+
+        $storage->store(
+            [\Msgpit\Core\Message::create('batch', 'spryng', \Msgpit\Core\Channel::Sms, '+31612345678', 'Hoi')],
+            new \Msgpit\Core\RawRequest('POST', '/spryng/v2/messages', [], '{}'),
+        );
+
+        $response = $api->handle(new Request('GET', '/api/messages/' . $storage->all()[0]->id));
+
+        self::assertNotNull($response);
+
+        $decoded = json_decode($response->body, true);
+
+        self::assertIsArray($decoded);
+        self::assertArrayNotHasKey('headers', $decoded);
+    }
+
     public function testAPartIsServedWithItsOwnContentType(): void
     {
         $id = $this->receive();

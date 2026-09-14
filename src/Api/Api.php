@@ -10,6 +10,7 @@ use Msgpit\Core\DlrDispatcher;
 use Msgpit\Core\LinkChecker;
 use Msgpit\Core\Message;
 use Msgpit\Core\ProviderRegistry;
+use Msgpit\Core\RawRequest;
 use Msgpit\Core\Scenario;
 use Msgpit\Core\Storage;
 use Msgpit\Core\SupportsDeliveryReports;
@@ -17,6 +18,7 @@ use Msgpit\Core\SupportsErrorScenarios;
 use Msgpit\Http\Request;
 use Msgpit\Mime\HtmlCheck;
 use Msgpit\Mime\Links;
+use Msgpit\Mime\Parser;
 use Msgpit\Http\Response;
 
 /** The /api routes: the UI talks to these, and so do integration tests in consuming projects. */
@@ -111,6 +113,14 @@ final readonly class Api
 
         if ($parts !== []) {
             $detail['parts'] = $parts;
+
+            // Every header the sender wrote, not the handful we keep in metadata. Read back from
+            // the stored message so nothing has to be duplicated at capture time, and so a
+            // message stored before we cared about a header still shows it.
+            $raw = $this->storage->rawRequest($id) ?? '';
+            $detail['headers'] = Parser::headers(
+                explode("\n\n", RawRequest::messageFrom(str_replace("\r\n", "\n", $raw)), 2)[0],
+            );
             $detail['html'] = $this->body($id, $parts, 'text/html');
             $detail['text'] = $this->body($id, $parts, 'text/plain');
 

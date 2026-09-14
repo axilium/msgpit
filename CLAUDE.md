@@ -85,6 +85,17 @@ verdicts per client version.
 - Tests run against a small invented dataset in `tests/fixtures/caniemail/`, so they do not move
   when caniemail publishes new measurements. One test reads the bundled file to prove its shape.
 
+### Headers
+
+The detail response carries **every** header, read back from the stored message rather than from
+the handful kept in `meta`. That is deliberate: nothing has to be duplicated at capture time, and
+a message stored before we cared about some header still shows it. `Mime\Parser::headers()` does
+the folding and the decoding.
+
+Mail analysis lives here, so do not trim the list: a missing `Date`, a `Return-Path` that
+disagrees with `From`, an `Auto-Submitted` that stops an auto-responder. A `Bcc` is visible here
+and nowhere else.
+
 ### The raw view
 
 `public/ui/rawmessage.js` lays a captured message out by structure: headers apart from bodies,

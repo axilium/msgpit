@@ -388,6 +388,49 @@ const mailPanels = {
         `;
     },
 
+    /** The html as the sender wrote it, which is not always what the preview suggests. */
+    source: (message) => `
+        <h3>HTML source</h3>
+        <pre class="source-html">${escapeHtml(message.html ?? '')}</pre>
+    `,
+
+    /**
+     * Every header, not the handful the summary shows. This is where mail analysis actually
+     * happens: a missing Date, a Return-Path that disagrees with From, a List-Unsubscribe that
+     * never made it in.
+     */
+    headers: (message) => {
+        const headers = message.headers ?? {};
+        const names = Object.keys(headers);
+
+        if (names.length === 0) {
+            return '<p class="empty">No headers were recorded.</p>';
+        }
+
+        // The ones people look for first, in the order they expect them.
+        const order = ['from', 'to', 'cc', 'bcc', 'reply-to', 'return-path', 'subject', 'date', 'message-id'];
+        const sorted = [
+            ...order.filter((name) => name in headers),
+            ...names.filter((name) => !order.includes(name)).sort(),
+        ];
+
+        return `
+            <h3>${plural(names.length, 'header')}</h3>
+            <div class="table-scroll">
+                <table class="headers">
+                    <tbody>
+                        ${sorted.map((name) => `
+                            <tr>
+                                <td class="header-name">${escapeHtml(name)}</td>
+                                <td class="header-value">${escapeHtml(headers[name])}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    },
+
     links: (message) => {
         const results = state.linkResults[message.id];
 
@@ -634,6 +677,12 @@ const tabsFor = (message) => {
         if (attachments.length > 0) {
             tabs.push(['attachments', 'Attachments', attachments.length]);
         }
+
+        if (message.html !== null) {
+            tabs.push(['source', 'HTML source', null]);
+        }
+
+        tabs.push(['headers', 'Headers', Object.keys(message.headers ?? {}).length || null]);
 
         if ((message.links ?? []).length > 0) {
             const checked = state.linkResults[message.id];

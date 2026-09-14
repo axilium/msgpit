@@ -53,6 +53,14 @@ goes to anyone reading mail without html, and it is the one people forget to kee
 **Attachments** lists what was attached, with its type and size, and lets you download it.
 Filenames with accents survive.
 
+**Headers** lists every header the sender wrote, not the handful in the summary. This is where
+mail analysis actually happens: a missing `Date`, a `Return-Path` that disagrees with `From`, a
+`List-Unsubscribe` that never made it in, an `Auto-Submitted` that decides whether an
+auto-responder will answer you. The addresses come first, the rest is alphabetical. A `Bcc` is
+visible here and nowhere else.
+
+**HTML source** is the html as the sender wrote it, which is not always what the preview suggests.
+
 **Raw** is the message exactly as it came off the wire, laid out the way it is actually built:
 headers, boundaries, and the bodies in between. Base64 is folded away behind its size, because a
 message with an attachment contains a single line of fifteen thousand characters and no amount of

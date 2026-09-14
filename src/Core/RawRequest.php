@@ -47,6 +47,17 @@ final readonly class RawRequest
         return substr($value, 0, 4) . str_repeat('*', strlen($value) - 8) . substr($value, -4);
     }
 
+    /**
+     * The message on its own, without the line naming how it arrived. For mail that is the whole
+     * thing: headers and all, exactly as the sender wrote it.
+     */
+    public static function messageFrom(string $rendered): string
+    {
+        $position = strpos($rendered, "\n\n");
+
+        return $position === false ? $rendered : substr($rendered, $position + 2);
+    }
+
     /** Rendered as a raw HTTP request, which is what a developer recognises. */
     public function toText(): string
     {
