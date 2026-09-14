@@ -688,11 +688,11 @@ dl.fields dd {
 }
 
 /* A heading with a control on the same line. */
+/* The switch belongs next to the heading it applies to, not at the far edge of the pane. */
 .body-head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+    gap: 14px;
     margin: 22px 0 8px;
 }
 
