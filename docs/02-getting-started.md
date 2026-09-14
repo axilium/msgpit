@@ -11,7 +11,7 @@ Add this to `.docksal/docksal.yml` in the project that needs it:
 services:
   msgpit:
     hostname: msgpit
-    image: ${MSGPIT_IMAGE:-ghcr.io/raymondsteffann/msgpit:1}
+    image: ${MSGPIT_IMAGE:-ghcr.io/axilium/msgpit:1}
     volumes:
       - msgpit_data:/data
     labels:
@@ -43,7 +43,7 @@ moving `:dev` tag. To point one project at that build without touching the share
 in `.docksal/docksal-local.env`, which is gitignored:
 
 ```dotenv
-MSGPIT_IMAGE=ghcr.io/raymondsteffann/msgpit:dev
+MSGPIT_IMAGE=ghcr.io/axilium/msgpit:dev
 ```
 
 Then `fin up` and check the version in the status bar at the bottom of the UI. Remove the line to
@@ -53,7 +53,7 @@ rather than the latest one.
 ## Plain Docker
 
 ```bash
-docker run -p 8080:8080 -v msgpit_data:/data ghcr.io/raymondsteffann/msgpit:1
+docker run -p 8080:8080 -v msgpit_data:/data ghcr.io/axilium/msgpit:1
 ```
 
 The image runs as an unprivileged user and takes ownership of `/data` on start, so an existing

@@ -23,7 +23,7 @@ Symfony Mailer with `smtp://mail:1025`, and Laravel with `MAIL_HOST=mailpit` all
 services:
   msgpit:
     hostname: msgpit
-    image: ${MSGPIT_IMAGE:-ghcr.io/raymondsteffann/msgpit:1}
+    image: ${MSGPIT_IMAGE:-ghcr.io/axilium/msgpit:1}
     volumes:
       - msgpit_data:/data
     networks:

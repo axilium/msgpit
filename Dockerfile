@@ -5,8 +5,8 @@ ARG MSGPIT_VERSION=dev
 
 LABEL org.opencontainers.image.title="msgpit" \
       org.opencontainers.image.description="Local catcher for outgoing SMS and push messages. Mailpit, but for message provider APIs." \
-      org.opencontainers.image.source="https://github.com/raymondsteffann/msgpit" \
-      org.opencontainers.image.documentation="https://github.com/raymondsteffann/msgpit#readme" \
+      org.opencontainers.image.source="https://github.com/axilium/msgpit" \
+      org.opencontainers.image.documentation="https://github.com/axilium/msgpit#readme" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version="${MSGPIT_VERSION}"
 
