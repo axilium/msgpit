@@ -81,8 +81,10 @@ const state = {
     rawView: 'structured',
     sourceView: 'formatted',
     linkResults: {},
-    // Reports with the DNS checks filled in, per message: they are only run when asked for.
+    // Reports with the DNS checks filled in, per message. Run when the tab is opened rather than
+    // when the message is, so reading your post never waits on a resolver.
     authResults: {},
+    authFailed: {},
     checkingLinks: false,
     endpoints: {providers: [], smtp: null},
     scenarios: [],
@@ -394,6 +396,7 @@ const bodyToggle = (message) => {
 const SECTIONS = {
     spam: 'Spam filters',
     authentication: 'Authentication',
+    reputation: 'Reputation',
     content: 'Message content',
     headers: 'Headers',
     links: 'Links',
@@ -454,9 +457,9 @@ const mailPanels = {
                 <h3>${escapeHtml(title)}</h3>
                 ${title === SECTIONS.authentication && !state.authResults[message.id] ? `
                     <p class="check-prompt">
-                        SPF, DKIM, DMARC and reverse DNS are read from the sender's own zone, so this
-                        asks DNS. Nothing leaves the network beyond those lookups.
-                        <button type="button" class="ghost" data-authentication="${escapeHtml(message.id)}">Look them up</button>
+                        ${state.authFailed[message.id]
+                            ? 'Those lookups did not come back. <button type="button" class="ghost" data-authentication>Try again</button>'
+                            : 'Asking DNS what the sender\'s own zone says. Nothing leaves the network beyond those lookups.'}
                     </p>
                 ` : ''}
                 <ul class="findings">${findings.map(renderFinding).join('')}</ul>
@@ -836,6 +839,30 @@ const tabsFor = (message) => {
     return tabs;
 };
 
+// Idempotent: renderDetail runs on every refresh, and this must ask DNS once per message.
+const pendingAuthentication = new Set();
+
+const loadAuthentication = async (message) => {
+    if (state.authResults[message.id] || state.authFailed[message.id] || pendingAuthentication.has(message.id)) {
+        return;
+    }
+
+    pendingAuthentication.add(message.id);
+
+    try {
+        const {report} = await api(`/messages/${message.id}/authentication`, {method: 'POST'});
+        state.authResults = {...state.authResults, [message.id]: report};
+    } catch {
+        state.authFailed = {...state.authFailed, [message.id]: true};
+    } finally {
+        pendingAuthentication.delete(message.id);
+
+        if (state.selectedId === message.id) {
+            renderDetail(message);
+        }
+    }
+};
+
 const renderDetail = (message) => {
     const tabs = tabsFor(message);
 
@@ -896,23 +923,14 @@ const renderDetail = (message) => {
         }
     });
 
-    el.detail.querySelector('[data-authentication]')?.addEventListener('click', async (event) => {
-        const button = event.currentTarget;
-
-        button.disabled = true;
-        button.textContent = 'Looking up...';
-
-        try {
-            const {report} = await api(`/messages/${message.id}/authentication`, {method: 'POST'});
-            state.authResults = {...state.authResults, [message.id]: report};
-        } catch {
-            button.textContent = 'That did not work';
-
-            return;
-        }
-
-        renderDetail(message);
+    el.detail.querySelector('[data-authentication]')?.addEventListener('click', () => {
+        state.authFailed = {...state.authFailed, [message.id]: false};
+        loadAuthentication(message);
     });
+
+    if (state.tab === 'report') {
+        loadAuthentication(message);
+    }
 
     el.detail.querySelectorAll('[data-source]').forEach((button) => {
         button.addEventListener('click', () => {

@@ -8,6 +8,7 @@ enum Section: string
 {
     case Spam = 'spam';
     case Authentication = 'authentication';
+    case Reputation = 'reputation';
     case Content = 'content';
     case Headers = 'headers';
     case Links = 'links';
@@ -17,6 +18,7 @@ enum Section: string
         return match ($this) {
             self::Spam => 'Spam filters',
             self::Authentication => 'Authentication',
+            self::Reputation => 'Reputation',
             self::Content => 'Message content',
             self::Headers => 'Headers',
             self::Links => 'Links',

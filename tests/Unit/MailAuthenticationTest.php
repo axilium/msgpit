@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Msgpit\Tests\Unit;
 
 use Msgpit\Core\Resolver;
+use Msgpit\Mail\Report\Blocklists;
 use Msgpit\Mail\Report\Context;
 use Msgpit\Mail\Report\Dmarc;
 use Msgpit\Mail\Report\Finding;
@@ -298,5 +299,92 @@ final class MailAuthenticationTest extends TestCase
 
         self::assertSame(Status::Warn, $finding->status);
         self::assertStringContainsString('no DKIM signature', $finding->title);
+    }
+
+    /** @param array<string, list<string>> $listings */
+    private function blocklistFinding(array $listings): Finding
+    {
+        $context = $this->context(
+            ['Received' => 'from x (x [93.184.216.34]) by mx.test'],
+            $this->resolver(addresses: $listings),
+        );
+
+        return $this->finding($context, 'blocklists');
+    }
+
+    public function testACleanAddressPassesEveryList(): void
+    {
+        $finding = $this->blocklistFinding([]);
+
+        self::assertSame(Status::Pass, $finding->status);
+        self::assertStringContainsString((string) Blocklists::count(), $finding->title);
+    }
+
+    public function testAListedAddressFails(): void
+    {
+        $finding = $this->blocklistFinding(['34.216.184.93.zen.spamhaus.org' => ['127.0.0.2']]);
+
+        self::assertSame(Status::Fail, $finding->status);
+        self::assertStringContainsString('Spamhaus', $finding->title);
+        self::assertStringContainsString('Listed in Spamhaus (127.0.0.2)', $finding->evidence[0], 'The worst result comes first');
+    }
+
+    /**
+     * The policy block list says "this address should not send mail directly", which is true of
+     * every home connection and says nothing about the message.
+     */
+    public function testAPolicyListingIsNotAnAccusation(): void
+    {
+        $finding = $this->blocklistFinding(['34.216.184.93.zen.spamhaus.org' => ['127.0.0.10']]);
+
+        self::assertSame(Status::Warn, $finding->status);
+        self::assertStringContainsString('policy list', $finding->title);
+    }
+
+    /** The same code means the opposite on a list that answers for good addresses. */
+    public function testAWhitelistingIsNotAListing(): void
+    {
+        $finding = $this->blocklistFinding(['34.216.184.93.hostkarma.junkemailfilter.com' => ['127.0.0.1']]);
+
+        self::assertSame(Status::Pass, $finding->status);
+    }
+
+    public function testHostkarmaYellowIsCaution(): void
+    {
+        $finding = $this->blocklistFinding(['34.216.184.93.hostkarma.junkemailfilter.com' => ['127.0.0.3']]);
+
+        self::assertSame(Status::Warn, $finding->status);
+    }
+
+    /** Lists answer in this range to refuse a query, and reading that as a listing is backwards. */
+    public function testARefusedQueryIsNotAListing(): void
+    {
+        $finding = $this->blocklistFinding(['34.216.184.93.zen.spamhaus.org' => ['127.255.255.252']]);
+
+        self::assertSame(Status::Pass, $finding->status);
+        self::assertStringContainsString('declined to answer', $finding->explanation);
+    }
+
+    public function testEveryListRefusingIsNotAVerdict(): void
+    {
+        $listings = [];
+
+        foreach ((new Blocklists($this->resolver()))->check('93.184.216.34') as $result) {
+            $listings["34.216.184.93.{$result->zone}"] = ['127.255.255.252'];
+        }
+
+        self::assertSame(Status::Skip, $this->blocklistFinding($listings)->status);
+    }
+
+    public function testAnIpv6SenderIsNotGuessedAt(): void
+    {
+        $context = $this->context(
+            ['Received' => 'from x (x [2001:db8::1]) by mx.test'],
+            $this->resolver(),
+        );
+        $finding = $this->finding($context, 'blocklists');
+
+        self::assertSame(Status::Skip, $finding->status);
+        self::assertStringContainsString('IPv4 only', $finding->explanation);
     }
 }

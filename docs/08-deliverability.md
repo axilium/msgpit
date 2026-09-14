@@ -53,10 +53,10 @@ phishing message whatever the reason for it here. Url shorteners, which hide the
 ## The checks that ask DNS
 
 SPF, DKIM, DMARC and reverse DNS cannot be answered from the message alone: the answer lives in the
-sender's own zone. Those four sit behind a button, for two reasons. Opening a message should never
-wait on a resolver, and this is a second way out of the development network next to delivery-report
-callbacks and the link check. `MSGPIT_DNS=off` switches it off entirely, and the checks then report
-as not applicable rather than failing.
+sender's own zone. Those run when you open the Deliverability tab, not when you open the message.
+Reading your post should never wait on a resolver, and most of the time you are not asking this
+question at all. `MSGPIT_DNS=off` switches it off entirely, and the checks then report as not
+applicable rather than failing.
 
 What you get depends again on the message. A delivered `.eml` names the sending address in its
 `Received` headers, so SPF can be evaluated against it for a real verdict and the reverse lookup has
@@ -68,6 +68,17 @@ DKIM is verified here only when nothing else has: a signature with no `Authentic
 beside it, which is what a `.eml` from a Sent folder looks like. A failing body hash is reported as
 its own thing, because a mail client that re-encoded the message on export is a far likelier cause
 than a bad key.
+
+Opening the tab also asks sixteen blocklists whether they know the sending address. That is a
+question about the machine, not about the message, so it means nothing for mail that never crossed
+a network. A listing is read against the list that gave it: the code in the answer is not simply
+"yes", and the same `127.0.0.1` that means spam source on one list means known good on another. A
+policy listing, which marks addresses that should not send mail directly such as home connections,
+is reported as what it is rather than as an accusation.
+
+Lists refuse to answer queries that arrive through a public resolver, and say so in a reserved range
+of their own. msgpit reports that as declined rather than as a listing. If every list declines, the
+container is using a public resolver and the check needs one of your own to mean anything.
 
 Answers are cached with the TTL the record carries, so twenty messages from one domain cost one
 lookup between them.

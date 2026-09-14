@@ -197,8 +197,10 @@ with explicit permission: this is the exception to "do not reimplement a package
 exists because SPF, DMARC and DKIM cannot be judged without it: the answer lives in the sender's
 zone and nowhere else.
 
-- **Behind a button, never on the path of opening a message.** A resolver that is slow or gone would
-  make reading your own post slow or gone.
+- **Runs when the Deliverability tab is opened, never when a message is.** A resolver that is slow or
+  gone would otherwise make reading your own post slow or gone, and most of the time nobody is
+  asking the question. The detail response is built without DNS; the tab fetches the full report
+  again with it, once per message.
 - `MSGPIT_DNS=off` switches it off; the checks then report as not applicable, which is a supported
   way to work and not a failure.
 - Answers are cached with the TTL of the record, in the generic `cache` table. It outlives the
@@ -209,6 +211,14 @@ zone and nowhere else.
 - `dns_get_record()` cannot be pointed at a specific nameserver, whatever it looks like: `$authns`
   is an output. Aiming at an authoritative server would mean writing a resolver over UDP, and
   measured lookups run at 17 to 56 ms through the container's resolver, so the win is in the cache.
+- **A blocklist answer is never just yes.** The meaning is in the last octet and it differs per
+  list: the code that means "spam source" on one means "known good" on another, and Spamhaus's
+  policy range only says an address should not be sending mail directly, which is true of every
+  home connection. Read the code against the list that gave it, or the report accuses people of
+  things they did not do.
+- Lists answer in `127.255.255.0/24` to refuse a query, which is what they do for anything arriving
+  through a public resolver. Reading that as a listing is exactly backwards; when every list refuses,
+  say the resolver is the problem.
 - DMARC needs the organisational domain. RFC 7489 says to find it with the public suffix list; we
   walk up a label at a time and stop while two are left. Same record for every real zone, a lookup
   or two more, and no 200 kB list to keep fresh. The case it gets wrong is a public suffix that
@@ -367,7 +377,7 @@ Providers are pure translators: parse request, validate required fields and auth
 | `GET /api/messages/{id}` | Message detail incl. raw request and DLR history |
 | `DELETE /api/messages` | Clear all |
 | `POST /api/messages/import` | Import a raw `.eml` (body is the file) |
-| `POST /api/messages/{id}/authentication` | Run the DNS checks. Asks DNS |
+| `POST /api/messages/{id}/authentication` | Rebuild the report with the DNS checks. Asks DNS |
 | `POST /api/messages/{id}/read` | Mark one message read |
 | `POST /api/messages/read` | Mark everything read |
 | `POST /api/messages/{id}/dlr` | `{"status":"delivered"}` send delivery report |

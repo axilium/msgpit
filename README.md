@@ -84,7 +84,7 @@ a message was sent, then clear.
 | `GET /api/messages/{id}` | One message with its raw request and delivery reports |
 | `DELETE /api/messages` | Clear all |
 | `POST /api/messages/import` | Import a raw `.eml` (body is the file) |
-| `POST /api/messages/{id}/authentication` | Run the DNS checks and return the full report |
+| `POST /api/messages/{id}/authentication` | Rebuild the report with the SPF, DKIM, DMARC, rDNS and blocklist checks |
 | `POST /api/messages/{id}/dlr` | `{"status":"delivered"}` sends a delivery report |
 | `POST /api/scenario` | `{"scenario":"ServerError"}` fails the next provider request |
 | `GET /api/providers` | Enabled providers and their capabilities |

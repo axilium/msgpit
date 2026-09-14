@@ -49,6 +49,7 @@ final readonly class Report
         Checks\DkimSignature::class,
         Checks\DmarcPolicy::class,
         Checks\ReverseDns::class,
+        Checks\Blocklisted::class,
     ];
 
     /** @param list<Finding> $findings */
