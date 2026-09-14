@@ -105,7 +105,13 @@ body text); `Core\LinkChecker` fetches them.
   password reset or an unsubscribe link can spend it, and a tracking pixel counts the fetch as a
   read. The UI says so before the button, and that warning stays.
 - HEAD first, GET when the server refuses it. Redirects are reported, not followed: a redirect
-  chain is what you want to see.
+  chain is what you want to see, and not following it also means no second host to validate.
+- **Link-local addresses are refused, and the decision is made on the resolved address.** That is
+  where cloud metadata services live, and they hand out credentials to whatever asks. A hostname
+  denylist does not do it: a name that resolves to 169.254.169.254 is the whole trick, and so is a
+  trailing dot. The rest of the private network stays reachable on purpose, because checking that
+  a template built the right url for `http://web` is one of the reasons this exists. Only http and
+  https are fetched.
 - Results are not stored. They are about the world right now, not about the message.
 
 ### Spam scoring

@@ -140,30 +140,53 @@ final class LinksTest extends TestCase
     }
 
     /**
-     * Cloud metadata services hand out credentials to anything that asks, and no mail has a
-     * reason to link there. The rest of the private network stays reachable on purpose.
+     * Cloud metadata services live on link-local addresses and hand out credentials to whatever
+     * asks. No mail has a reason to point there. The rest of the private network stays reachable
+     * on purpose, so this is a narrow refusal rather than a blanket one.
+     *
+     * @param string $url
      */
-    public function testLinkLocalAddressesAreRefused(): void
+    #[\PHPUnit\Framework\Attributes\DataProvider('refusedUrls')]
+    public function testLinkLocalAddressesAreRefused(string $url): void
     {
-        $results = (new LinkChecker(timeout: 1))->check([
-            ['url' => 'http://169.254.169.254/latest/meta-data/', 'kind' => 'link'],
-            ['url' => 'http://metadata.google.internal/computeMetadata/v1/', 'kind' => 'link'],
-        ]);
+        $result = (new LinkChecker(timeout: 1))->check([['url' => $url, 'kind' => 'link']])[0];
 
-        foreach ($results as $result) {
-            self::assertNull($result['status']);
-            self::assertSame('Refused: link-local address', $result['reason']);
+        self::assertNull($result['status']);
+        self::assertSame('Refused: link-local address', $result['reason']);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function refusedUrls(): iterable
+    {
+        yield 'aws and gcp metadata' => ['http://169.254.169.254/latest/meta-data/'];
+        // A trailing dot is the same host to a resolver, so it must not be a way around this.
+        yield 'with a trailing dot' => ['http://169.254.169.254./latest/meta-data/'];
+        yield 'ipv6 link-local' => ['http://[fe80::1]/'];
+        // The same address wearing an IPv6 hat.
+        yield 'ipv4-mapped ipv6' => ['http://[::ffff:169.254.169.254]/'];
+        yield 'anywhere in the range' => ['http://169.254.42.7/'];
+    }
+
+    public function testOnlyHttpAndHttpsAreFetched(): void
+    {
+        foreach (['ftp://example.test/x', 'file:///etc/passwd', 'gopher://example.test/'] as $url) {
+            $result = (new LinkChecker(timeout: 1))->check([['url' => $url, 'kind' => 'link']])[0];
+
+            self::assertSame('Refused: only http and https are fetched', $result['reason'], $url);
         }
     }
 
+    /**
+     * The private network is the interesting part: a template that built its urls from the wrong
+     * host is exactly what this check is for. Only link-local is off limits.
+     */
     public function testAnOrdinaryPrivateAddressIsStillChecked(): void
     {
-        // Nothing listens there, so it fails to connect rather than being refused outright.
-        $results = (new LinkChecker(timeout: 1))->check([
-            ['url' => 'http://192.168.255.254:1/pad', 'kind' => 'link'],
-        ]);
+        foreach (['http://192.168.255.254:1/pad', 'http://10.255.255.254:1/pad', 'http://127.0.0.1:1/pad'] as $url) {
+            $result = (new LinkChecker(timeout: 1))->check([['url' => $url, 'kind' => 'link']])[0];
 
-        self::assertSame('Could not connect', $results[0]['reason']);
+            self::assertSame('Could not connect', $result['reason'], "{$url} should be attempted, not refused");
+        }
     }
 
     public function testCheckingNothingIsNotAnError(): void

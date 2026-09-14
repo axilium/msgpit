@@ -110,6 +110,10 @@ it never happens on capture, and never when you simply open a message.
 Links inside your own Docker network work too, which makes this useful for the thing that actually
 breaks: a mail template that built an url from the wrong host.
 
+One exception: link-local addresses are refused, checked on where the name actually resolves to.
+That is where cloud metadata services sit, and they will hand credentials to anything that asks
+them. Nothing else on the private network is blocked.
+
 Redirects are reported rather than followed, so you see the chain instead of only its end. Results
 are not stored, because they say something about the world right now and not about the message.
 

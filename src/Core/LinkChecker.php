@@ -38,26 +38,25 @@ final readonly class LinkChecker
     }
 
     /**
-     * Link-local addresses, which is where cloud metadata services live: 169.254.169.254 and
-     * friends hand out credentials to anything that asks. No mail has a legitimate reason to
-     * point there, so it is refused even though the rest of the private network is allowed.
+     * Ranges a message has no business pointing at, checked numerically rather than by name.
+     *
+     * This is where cloud metadata services live, and they hand out credentials to whatever asks.
+     * Everything else on the private network stays reachable on purpose: checking that a template
+     * built the right url for http://web is one of the reasons this exists.
      */
-    private const REFUSED_HOSTS = [
-        '/^169\.254\./',
-        '/^\[?fe80:/i',
-        '/^\[?fd00:ec2::254\]?$/i',
-        '/^metadata\.google\.internal$/i',
+    private const REFUSED_RANGES = [
+        ['169.254.0.0', 16],   // IPv4 link-local, including 169.254.169.254
+        ['fe80::', 10],        // IPv6 link-local
+        ['fd00:ec2::', 64],    // AWS IMDS over IPv6
     ];
 
     /** @return array{status: ?int, reason: ?string, redirect: ?string} */
     private function probe(string $url): array
     {
-        $host = parse_url($url, PHP_URL_HOST);
+        $refusal = $this->refuse($url);
 
-        // Everything else on the private network is fair game: checking that a template built the
-        // right url for http://web is one of the reasons this exists at all.
-        if (is_string($host) && self::isRefused($host)) {
-            return ['status' => null, 'reason' => 'Refused: link-local address', 'redirect' => null];
+        if ($refusal !== null) {
+            return ['status' => null, 'reason' => $refusal, 'redirect' => null];
         }
 
         $result = $this->request($url, 'HEAD');
@@ -72,6 +71,101 @@ final readonly class LinkChecker
         }
 
         return $result;
+    }
+
+    /** @return string|null The reason to refuse, or null when the url may be fetched. */
+    private function refuse(string $url): ?string
+    {
+        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+
+        if (!in_array($scheme, ['http', 'https'], true)) {
+            return 'Refused: only http and https are fetched';
+        }
+
+        $host = parse_url($url, PHP_URL_HOST);
+
+        if (!is_string($host) || $host === '') {
+            return 'Refused: no host';
+        }
+
+        // A trailing dot is the same host to a resolver, and brackets belong to the url syntax.
+        $host = strtolower(rtrim(trim($host, '[]'), '.'));
+
+        foreach ($this->addressesOf($host) as $address) {
+            if (self::isRefusedAddress($address)) {
+                return 'Refused: link-local address';
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Where the host actually leads. A name is only a name: evil.example.com resolving to
+     * 169.254.169.254 is the whole trick, so the decision has to be made on the address.
+     *
+     * @return list<string>
+     */
+    private function addressesOf(string $host): array
+    {
+        if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
+            return [$host];
+        }
+
+        $addresses = [];
+
+        foreach (gethostbynamel($host) ?: [] as $address) {
+            $addresses[] = $address;
+        }
+
+        foreach (@dns_get_record($host, DNS_AAAA) ?: [] as $record) {
+            if (is_string($record['ipv6'] ?? null)) {
+                $addresses[] = $record['ipv6'];
+            }
+        }
+
+        return $addresses;
+    }
+
+    private static function isRefusedAddress(string $address): bool
+    {
+        $packed = @inet_pton($address);
+
+        if ($packed === false) {
+            return false;
+        }
+
+        // An IPv4-mapped IPv6 address is that IPv4 address wearing a hat.
+        if (strlen($packed) === 16 && str_starts_with($packed, str_repeat("\0", 10) . "\xff\xff")) {
+            $packed = substr($packed, 12);
+        }
+
+        foreach (self::REFUSED_RANGES as [$network, $bits]) {
+            $base = @inet_pton($network);
+
+            if ($base === false || strlen($base) !== strlen($packed)) {
+                continue;
+            }
+
+            $bytes = intdiv($bits, 8);
+            $remainder = $bits % 8;
+
+            if (substr($packed, 0, $bytes) !== substr($base, 0, $bytes)) {
+                continue;
+            }
+
+            if ($remainder === 0) {
+                return true;
+            }
+
+            $mask = 0xFF << (8 - $remainder) & 0xFF;
+
+            if ((ord($packed[$bytes]) & $mask) === (ord($base[$bytes]) & $mask)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** @return array{status: ?int, reason: ?string, redirect: ?string} */
@@ -112,17 +206,6 @@ final readonly class LinkChecker
             'reason' => null,
             'redirect' => self::header($headers, 'location'),
         ];
-    }
-
-    private static function isRefused(string $host): bool
-    {
-        foreach (self::REFUSED_HOSTS as $pattern) {
-            if (preg_match($pattern, $host) === 1) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /** @param list<string> $headers */
