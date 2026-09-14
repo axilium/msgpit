@@ -100,6 +100,69 @@ test('crlf line endings are handled', () => {
     assert.match(html, /<span class="raw-name">From:<\/span>/);
 });
 
+test('the headers of a block share one grid, so their values line up', () => {
+    const html = renderRawMessage(message('tekst'));
+    const blocks = html.match(/<div class="raw-headers">.*?<\/div>/gs) ?? [];
+
+    assert.equal(blocks.length, 1, 'The four headers at the top form a single block');
+    assert.match(blocks[0], /<span class="raw-name">From:<\/span><span class="raw-value">InvalPool &lt;info@invalpool\.nl&gt;<\/span>/);
+    assert.match(blocks[0], /<span class="raw-name">Subject:<\/span>/);
+});
+
+/**
+ * Aligning over the whole message would let one long Content-Disposition in an attachment push
+ * From and To far to the right. Every block gets its own column instead.
+ */
+test('each header block is aligned on its own', () => {
+    const html = renderRawMessage(message([
+        '--mix',
+        'Content-Type: application/pdf; name="a.pdf"',
+        'Content-Disposition: attachment; filename="a.pdf"',
+        '',
+        'hoi',
+        '--mix--',
+    ].join('\n')));
+    const blocks = html.match(/<div class="raw-headers">.*?<\/div>/gs) ?? [];
+
+    assert.equal(blocks.length, 2, 'The main headers and the part headers are separate blocks');
+    assert.doesNotMatch(blocks[0], /Content-Disposition/, 'The long part header stays out of the top block');
+    assert.match(blocks[1], /<span class="raw-name">Content-Disposition:<\/span>/);
+});
+
+test('a folded header runs along with the value column', () => {
+    const html = renderRawMessage(message('tekst').replace(
+        'Subject: Aanstelling',
+        'Subject: Aanstelling\n bevestigd',
+    ));
+    const blocks = html.match(/<div class="raw-headers">.*?<\/div>/gs) ?? [];
+
+    assert.equal(blocks.length, 1, 'A continuation line does not break the block');
+    assert.match(blocks[0], /<span class="raw-value raw-folded">bevestigd<\/span>/);
+});
+
+/**
+ * The b= of a DKIM signature is a continuation line that looks exactly like base64. Folding it
+ * away would tear the header block in two and leave the headers below it aligned separately.
+ */
+test('a base64-looking continuation line stays in its header block', () => {
+    const signature = 'Xy8Kq2mZ0LpQwErTyUiOpAsDfGhJkLzXcVbNmQwErTyUiOpAsDfGhJkLzXcVbNm';
+    const html = renderRawMessage(message('tekst').replace(
+        'To: raymond@example.test',
+        `DKIM-Signature: v=1; a=rsa-sha256; d=invalpool.nl;\n b=${signature}\nTo: raymond@example.test`,
+    ));
+    const blocks = html.match(/<div class="raw-headers">.*?<\/div>/gs) ?? [];
+
+    assert.doesNotMatch(html, /<details class="blob">/, 'The signature is part of the header, not a blob');
+    assert.equal(blocks.length, 1, 'The block is not torn in two');
+});
+
+test('the envelope line gets no column', () => {
+    const html = renderRawMessage(message('tekst'));
+
+    assert.match(html, /<div class="raw-line">SMTP inbound HTTP\/1\.1<\/div>/, 'It is not a header and not a folded line');
+    assert.doesNotMatch(html, /raw-folded">SMTP/);
+});
+
 test('every line of a real message ends up somewhere', () => {
     const html = renderRawMessage(message('--mix\nContent-Type: text/plain\n\nregel een\nregel twee\n--mix--'));
 

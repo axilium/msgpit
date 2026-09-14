@@ -813,13 +813,33 @@ dl.fields dd {
     word-break: break-word;
 }
 
-.raw-name {
-    color: var(--accent);
+/*
+ * One header block, aligned on its own: the values of this block start at the same column, but a
+ * long Content-Disposition in an attachment does not shift the headers at the top of the message.
+ * The name column never takes more than part of the width, so a long header name cannot push the
+ * values out of sight.
+ */
+.raw-headers {
+    display: grid;
+    grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+    column-gap: 10px;
 }
 
-/* A continuation line of a folded header. */
+.raw-name {
+    max-width: 32ch;
+    color: var(--accent);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.raw-value {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* A continuation line of a folded header: no name, so it starts in the value column. */
 .raw-folded {
-    padding-left: 16px;
+    grid-column: 2;
     color: var(--text-soft);
 }
 
